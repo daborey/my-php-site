@@ -29,7 +29,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
 
     <div class="form-container">
-        <h2>Register</h2>
+        <h2>Register M</h2>
         
         <?php if (!empty($message)): ?>
             <p class="message"><?php echo $message; ?></p>
