@@ -1,7 +1,12 @@
 # Use official PHP image with built-in web server
 FROM php:8.2-cli
 
-# Install SQLite extensions if needed
+# Install system dependencies required for SQLite
+RUN apt-get update && apt-get install -y \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PDO and SQLite extensions for PHP
 RUN docker-php-ext-install pdo pdo_sqlite
 
 # Set the working directory inside the container
