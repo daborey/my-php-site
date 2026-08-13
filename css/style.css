@@ -6,7 +6,7 @@ body {
 }
 
 .container {
-    max-width: 600px;
+    max-width: 650px;
     margin: 40px auto;
     background: #ffffff;
     padding: 30px;
@@ -16,30 +16,65 @@ body {
 
 h1, h2 {
     color: #333333;
+    text-align: center;
 }
 
-form {
-    display: flex;
-    gap: 10px;
+h1 {
     margin-bottom: 25px;
 }
 
-input[type="text"] {
-    flex: 1;
+.forms-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.form-box {
+    background: #fdfdfd;
+    padding: 20px;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+}
+
+.form-box h2 {
+    margin-top: 0;
+    font-size: 20px;
+    text-align: left;
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+.form-box label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #555;
+    font-size: 14px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+    width: 100%;
     padding: 10px;
-    font-size: 16px;
+    font-size: 15px;
     border: 1px solid #ccc;
     border-radius: 4px;
+    margin-bottom: 15px;
+    box-sizing: border-box;
 }
 
 button {
-    padding: 10px 20px;
+    width: 100%;
+    padding: 10px;
     font-size: 16px;
     background-color: #007bff;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    font-weight: bold;
 }
 
 button:hover {
@@ -47,26 +82,45 @@ button:hover {
 }
 
 .success {
-    color: #28a745;
-    background-color: #e8f5e9;
-    padding: 10px;
+    color: #155724;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    padding: 12px;
     border-radius: 4px;
     margin-bottom: 20px;
+    text-align: center;
 }
 
-ul {
-    list-style-type: none;
-    padding: 0;
+.error {
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    text-align: center;
 }
 
-li {
-    padding: 10px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
+.dashboard {
+    text-align: center;
+    padding: 20px 0;
 }
 
-li span {
-    color: #888;
-    font-size: 14px;
+.dashboard h2 {
+    color: #28a745;
+}
+
+.logout-btn {
+    display: inline-block;
+    margin-top: 15px;
+    padding: 10px 25px;
+    background-color: #dc3545;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.logout-btn:hover {
+    background-color: #c82333;
 }
