@@ -1,7 +1,17 @@
-FROM php:8.2-apache
+# Use official PHP image with built-in web server
+FROM php:8.2-cli
 
-# Copy your code into the Apache public folder
-COPY . /var/www/html/
+# Install SQLite extensions if needed
+RUN docker-php-ext-install pdo pdo_sqlite
 
-# Tell Apache to listen on port 8080 (which Cloud Run requires)
-RUN sed -i 's/80/8080/g' /etc/apache2/sites-available/000-default.conf /etc/apache2/ports.conf
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy all project files into the container
+COPY . /app
+
+# Cloud Run dynamically assigns a port using the PORT environment variable
+ENV PORT=8080
+
+# Start the PHP built-in web server pointing to our app
+CMD php -S 0.0.0.0:$PORT
