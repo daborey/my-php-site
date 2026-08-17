@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>create another user window</title>
+</head>
+
+<body>
+    <h1>create another user window run as admin cmd</h1>
+    <pre>
+command: net user db1 2151 /add
+
+command: net localgroup Administrators db1 /add
+
+check
+
+command: net localgroup Administrators
+
+switch without restart
+
+command: tsdiscon
+    </pre>
+</body>
+
+</html>
