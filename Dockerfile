@@ -18,5 +18,5 @@ COPY . /app
 # Cloud Run dynamically assigns a port using the PORT environment variable
 ENV PORT=8080
 
-# Start the PHP built-in web server pointing to the folder containing your PHP scripts
-CMD php -S 0.0.0.0:$PORT -t daboreystep2
+# Start the PHP built-in web server pointing to our app
+CMD php -S 0.0.0.0:$PORT

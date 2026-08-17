@@ -84,7 +84,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Verify Credentials</button>
         </form>
-        <div class="links"><a href="register.php">Register System Identity</a></div>
+        <div class="links"><a href="/daboreystep2/register.php">Register System Identity</a></div>
     </div>
 </body>
 </html>
