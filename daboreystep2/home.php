@@ -273,6 +273,7 @@ $two_factor_tokens = fetchUserTokens($conn, $_SESSION['user_id']);
                         <span>Click or drop your 2FA QR code image here</span>
                         <input type="file" id="qr-file-input" accept="image/*">
                     </div>
+                    <div id="upload-status" style="margin-top: 10px; color: #94a3b8; font-size: 13px; text-align: center;"></div>
                 </div>
 
                 <div class="box">
@@ -367,8 +368,10 @@ $two_factor_tokens = fetchUserTokens($conn, $_SESSION['user_id']);
     const fileInput = document.getElementById('qr-file-input');
     const dropZone = document.getElementById('drop-zone');
     const searchBar = document.getElementById('live-search-bar');
+    const uploadStatus = document.getElementById('upload-status');
 
     function initScannerEngines() {
+        // Initialize with more robust settings for Google Authenticator QR codes
         fileEngineInstance = new Html5Qrcode("drop-zone");
         startSyncClock();
         
@@ -414,7 +417,11 @@ $two_factor_tokens = fetchUserTokens($conn, $_SESSION['user_id']);
         camInstance = new Html5Qrcode("viewport");
         camInstance.start(
             { facingMode: "environment" }, 
-            { fps: 15, qrbox: 180 },
+            { 
+                fps: 15, 
+                qrbox: 180,
+                aspectRatio: 1.0
+            },
             (decodedText) => { handleDecodedText(decodedText); },
             () => {}
         ).catch(() => { alert("Camera access denied or unavailable."); stopCamera(); });
@@ -439,34 +446,138 @@ $two_factor_tokens = fetchUserTokens($conn, $_SESSION['user_id']);
         if (e.dataTransfer.files.length) { processUploadedFile(e.dataTransfer.files[0]); }
     });
     fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length) { processUploadedFile(e.target.files[0]); }
+        if (e.target.files.length) { 
+            uploadStatus.textContent = "Processing image...";
+            processUploadedFile(e.target.files[0]); 
+        }
     });
 
     function processUploadedFile(file) {
-        if (!fileEngineInstance) return;
+        if (!fileEngineInstance) {
+            uploadStatus.textContent = "Scanner not initialized. Please refresh.";
+            return;
+        }
+        
+        uploadStatus.textContent = "Scanning QR code...";
+        
+        // Try with different configurations for better Google Authenticator support
         fileEngineInstance.scanFile(file, true)
-            .then(decodedText => { handleDecodedText(decodedText); })
-            .catch(() => { alert("Failed to parse image."); });
+            .then(decodedText => { 
+                uploadStatus.textContent = "QR code detected! Processing...";
+                handleDecodedText(decodedText); 
+            })
+            .catch((err) => { 
+                console.error("Scan error:", err);
+                uploadStatus.textContent = "Failed to read QR code. Try a clearer image or use Option 3.";
+                // Try alternative: use the image directly with a different approach
+                tryAlternativeScan(file);
+            });
+    }
+
+    function tryAlternativeScan(file) {
+        // Try to read the image using a different method - sometimes works better for Google Authenticator
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                // Try to extract text from the image using canvas
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Try to detect if it's a Google Authenticator QR by looking for patterns
+                    uploadStatus.textContent = "Alternative scan failed. Please use Option 3 to enter the key manually.";
+                } catch (err) {
+                    uploadStatus.textContent = "Could not process image. Please use Option 3.";
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
     }
 
     function handleDecodedText(text) {
+        console.log("Decoded text:", text);
         let lowerText = text.toLowerCase();
+        
+        // Try to extract secret from various formats
+        let secret = null;
+        let label = "2FA Token";
+        
+        // Format 1: Standard TOTP URI
         if (lowerText.includes('otpauth://') && lowerText.includes('secret=')) {
             try {
-                stopCamera();
-                let parts = text.split(/[?&]secret=/i);
-                let secretPart = parts[1].split('&')[0];
-                let labelPart = "2FA Token";
-                if (lowerText.includes('totp/')) {
-                    let labelExtract = text.split(/totp\//i)[1].split('?')[0];
-                    labelPart = decodeURIComponent(labelExtract);
+                // Extract secret - handles ?secret= and &secret=
+                let secretMatch = text.match(/[?&]secret=([^&]+)/i);
+                if (secretMatch) {
+                    secret = secretMatch[1];
                 }
-                document.getElementById('final-name').value = labelPart;
-                document.getElementById('final-seed').value = secretPart.toUpperCase().replace(/\s+/g, '');
-                document.getElementById('qr-submit-form').submit();
-            } catch (err) { alert("Processing failed."); }
+                
+                // Extract label
+                if (lowerText.includes('totp/')) {
+                    let labelMatch = text.match(/otpauth:\/\/totp\/([^?]+)/i);
+                    if (labelMatch) {
+                        label = decodeURIComponent(labelMatch[1]);
+                    }
+                }
+            } catch (err) {
+                console.error("Parse error:", err);
+            }
+        }
+        
+        // Format 2: Google Authenticator export format (sometimes just secret and issuer)
+        if (!secret) {
+            // Try to find secret with common patterns
+            let patterns = [
+                /secret[=:]\s*([A-Z2-7]{16,32})/i,
+                /key[=:]\s*([A-Z2-7]{16,32})/i,
+                /seed[=:]\s*([A-Z2-7]{16,32})/i,
+                /([A-Z2-7]{16,32})/  // Last resort: just find a Base32 string
+            ];
+            
+            for (let pattern of patterns) {
+                let match = text.match(pattern);
+                if (match && match[1].length >= 16) {
+                    secret = match[1];
+                    break;
+                }
+            }
+            
+            // Try to extract issuer/label
+            let issuerMatch = text.match(/issuer[=:]\s*([^&,\s]+)/i);
+            if (issuerMatch) {
+                label = decodeURIComponent(issuerMatch[1]);
+            } else {
+                let labelMatch = text.match(/label[=:]\s*([^&,\s]+)/i);
+                if (labelMatch) {
+                    label = decodeURIComponent(labelMatch[1]);
+                }
+            }
+        }
+        
+        if (secret) {
+            try {
+                stopCamera();
+                secret = secret.toUpperCase().replace(/\s+/g, '');
+                // Clean up any non-Base32 characters
+                secret = secret.replace(/[^A-Z2-7]/g, '');
+                
+                if (secret.length >= 16) {
+                    document.getElementById('final-name').value = label;
+                    document.getElementById('final-seed').value = secret;
+                    document.getElementById('qr-submit-form').submit();
+                    uploadStatus.textContent = "Success! Adding token...";
+                } else {
+                    uploadStatus.textContent = "Secret too short. Please use Option 3.";
+                }
+            } catch (err) { 
+                uploadStatus.textContent = "Processing failed: " + err.message;
+            }
         } else {
-            alert("Invalid 2FA layout format.");
+            uploadStatus.textContent = "Could not find a valid secret in the QR code. Please use Option 3.";
         }
     }
 
