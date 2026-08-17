@@ -2,7 +2,7 @@
 require 'db.php';
 
 if (isset($_SESSION['user_id'])) {
-    header("Location: home.php");
+    header("Location: /daboreystep2/home.php");
     exit;
 }
 
@@ -35,7 +35,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['last_activity'] = time();
                 
                 log_system_event($conn, $username, 'LOGIN_SUCCESSFUL');
-                header("Location: home.php");
+                header("Location: /daboreystep2/home.php");
                 exit;
             } else {
                 $login_attempts = $user['login_attempts'] + 1;

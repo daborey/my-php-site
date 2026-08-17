@@ -2,7 +2,7 @@
 require 'db.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header("Location: /daboreystep2/index.php");
     exit;
 }
 
@@ -11,7 +11,7 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 
     log_system_event($conn, $_SESSION['username'], 'SESSION_TIMEOUT_EXPIRED');
     session_unset();
     session_destroy();
-    header("Location: index.php?expired=1");
+    header("Location: /daboreystep2/index.php?expired=1");
     exit;
 }
 $_SESSION['last_activity'] = time();
@@ -242,7 +242,7 @@ $two_factor_tokens = fetchUserTokens($conn, $_SESSION['user_id']);
                 <h1>DaboreyPass 2-Step Terminal</h1>
                 <span style="color:#94a3b8; font-size:14px;">Logged in as: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong></span>
             </div>
-            <a href="logout.php" class="logout-btn">Logout</a>
+            <a href="/daboreystep2/logout.php" class="logout-btn">Logout</a>
         </div>
 
         <?php 

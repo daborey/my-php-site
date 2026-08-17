@@ -16,6 +16,6 @@ if (ini_get("session.use_cookies")) {
 }
 
 session_destroy();
-header("Location: index.php");
+header("Location: /daboreystep2/index.php");
 exit;
 ?>
