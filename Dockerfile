@@ -19,4 +19,4 @@ COPY . /app
 ENV PORT=8080
 
 # Start the PHP built-in web server pointing to the folder containing your PHP scripts
-CMD php -S 0.0.0.0:$PORT -t daboreysteps
+CMD php -S 0.0.0.0:$PORT -t daboreystep2
