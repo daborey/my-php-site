@@ -9,14 +9,12 @@
 const ENVIRONMENT = window.ENVIRONMENT || 'local';
 const BASE_PATH = window.BASE_PATH || '/my-php-site/daboreystep2';
 
-// Add environment class to body
-document.addEventListener('DOMContentLoaded', function() {
-    if (ENVIRONMENT === 'cloud') {
-        document.body.classList.add('env-cloud');
-    } else {
-        document.body.classList.add('env-local');
-    }
-});
+// ============================================
+// GLOBALS
+// ============================================
+let camInstance = null;
+let deviceInfo = { isMobile: false, isTablet: false, isDesktop: true };
+const status = document.getElementById('status');
 
 // ============================================
 // DEVICE DETECTION
@@ -27,11 +25,19 @@ function detectDevice() {
     const isTablet = /iPad|Tablet|Silk|KFAPWI|Nexus 7|Nexus 10|SM-T|GT-N/i.test(ua) && !isMobile;
     const isDesktop = !isMobile && !isTablet;
     
+    deviceInfo = { isMobile, isTablet, isDesktop };
+    
     const hint = document.getElementById('device-hint');
     const msg = document.getElementById('device-message');
     const icon = document.getElementById('camera-icon');
     const label = document.getElementById('camera-label');
     const startBtn = document.getElementById('start-cam-btn');
+    
+    // Check if elements exist before modifying
+    if (!hint || !msg || !icon || !label || !startBtn) {
+        console.warn("Device hint elements not found in DOM");
+        return;
+    }
     
     if (isMobile) {
         msg.textContent = '📱 Mobile device detected - using rear camera';
@@ -52,17 +58,11 @@ function detectDevice() {
         startBtn.innerHTML = '<span class="btn-icon">💻</span><span class="btn-label">Open Webcam</span>';
         document.body.classList.add('device-desktop');
     }
-    
-    return { isMobile, isTablet, isDesktop };
 }
 
 // ============================================
 // CAMERA SCANNER - Device-Aware + Environment-Aware
 // ============================================
-let camInstance = null;
-const status = document.getElementById('status');
-const deviceInfo = detectDevice();
-
 function startCamera() {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isHttps = window.location.protocol === 'https:';
@@ -184,6 +184,7 @@ if (dropZone) {
 }
 
 function processFile(file) {
+    if (!status) return;
     status.textContent = "Scanning...";
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -299,6 +300,7 @@ function parseGoogleMigration(text) {
 // SHARED DECODER
 // ============================================
 function handleDecodedText(text, source) {
+    if (!status) return;
     status.innerHTML = "Decoded: <code>" + text.substring(0, 60) + "...</code>";
 
     if (text.toLowerCase().startsWith('otpauth-migration://')) {
@@ -442,8 +444,19 @@ function copyTokenValue(id, btn) {
 }
 
 // ============================================
-// INIT
+// INIT - Runs when DOM is fully loaded
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
+    // Add environment class to body
+    if (ENVIRONMENT === 'cloud') {
+        document.body.classList.add('env-cloud');
+    } else {
+        document.body.classList.add('env-local');
+    }
+    
+    // Detect device
+    detectDevice();
+    
+    // Load OTPAuth
     loadOTPAuth();
 });
