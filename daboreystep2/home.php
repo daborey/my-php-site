@@ -396,5 +396,19 @@ if (!is_array($two_factor_tokens)) {
             </div>
         </div>
     </div>
+        <!-- ... all HTML content ... -->
+    
+    <!-- Move these to the bottom -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    
+    <script>
+        const ENVIRONMENT = '<?php echo ENVIRONMENT; ?>';
+        const BASE_PATH = '<?php echo $basePath; ?>';
+    </script>
+    
+    <script src="<?php echo $basePath; ?>/script.js"></script>
+</body>
+</html>
 </body>
 </html>
