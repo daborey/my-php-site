@@ -4,10 +4,8 @@ require 'db.php';
 // Auto-detect base path
 if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
     $basePath = '/daboreystep2';
-    $isCloudRun = true;
 } else {
     $basePath = '/my-php-site/daboreystep2';
-    $isCloudRun = false;
 }
 
 if (!isset($_SESSION['user_id'])) {
@@ -455,49 +453,40 @@ if (!is_array($two_factor_tokens)) {
 
     <script>
     // ============================================
-    // ENVIRONMENT DETECTION
-    // ============================================
-    const isCloudRun = <?php echo $isCloudRun ? 'true' : 'false'; ?>;
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    // ============================================
-    // CAMERA SCANNER (html5-qrcode) - WORKS ON CLOUD RUN ONLY
+    // CAMERA SCANNER - TWO CONDITIONS (XAMPP vs Cloud Run)
     // ============================================
     let camInstance = null;
+    const status = document.getElementById('status');
 
     function startCamera() {
-        // Condition 1: Check if on Cloud Run (HTTPS) - works
-        if (isCloudRun) {
-            // Cloud Run - HTTPS, camera works
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isHttps = window.location.protocol === 'https:';
+        
+        // Condition 1: Cloud Run (HTTPS) - works
+        if (!isLocal && isHttps) {
             startCameraEngine();
             return;
         }
         
-        // Condition 2: Check if on localhost with HTTPS or HTTP
+        // Condition 2: Localhost - try camera
         if (isLocal) {
-            // Localhost - try camera anyway (may work on some browsers)
-            if (window.location.protocol === 'https:') {
+            if (isHttps) {
                 startCameraEngine();
             } else {
-                // HTTP on localhost - browser may block camera
-                if (confirm("Camera access on HTTP may be blocked. Click OK to try, or Cancel to use Option 2 (Upload).")) {
+                // HTTP on localhost - browser may block
+                if (confirm("Camera on HTTP may be blocked. Try anyway?")) {
                     startCameraEngine();
                 } else {
                     document.getElementById('start-cam-btn').disabled = false;
                     document.getElementById('stop-cam-btn').disabled = true;
-                    status.textContent = "Camera cancelled. Use Option 2 (Upload) instead.";
+                    status.textContent = "Use Option 2 (Upload) instead.";
                 }
             }
             return;
         }
         
-        // Condition 3: Not localhost and not Cloud Run - likely HTTP without HTTPS
-        if (window.location.protocol !== 'https:') {
-            alert("Camera access requires HTTPS. Please use Option 2 (Upload) instead.");
-            return;
-        }
-        
-        startCameraEngine();
+        // Not localhost and not HTTPS - camera blocked
+        alert("Camera requires HTTPS. Please use Option 2 (Upload).");
     }
 
     function startCameraEngine() {
@@ -509,26 +498,17 @@ if (!is_array($two_factor_tokens)) {
             camInstance = new Html5Qrcode("viewport");
             camInstance.start(
                 { facingMode: "environment" },
-                { 
-                    fps: 15, 
-                    qrbox: 180,
-                    aspectRatio: 1.0
-                },
-                (decodedText) => { 
-                    handleDecodedText(decodedText, 'camera'); 
-                },
-                (error) => {
-                    // Ignore scan errors - keep scanning
-                }
+                { fps: 15, qrbox: 180 },
+                (decodedText) => { handleDecodedText(decodedText, 'camera'); },
+                () => {}
             ).then(() => {
-                status.textContent = "Camera ready - scanning for QR codes...";
-            }).catch((err) => { 
-                console.error("Camera start error:", err);
-                status.textContent = "Camera access denied. Use Option 2 (Upload) instead.";
-                stopCamera(); 
+                status.textContent = "Camera ready - scanning...";
+            }).catch((err) => {
+                status.textContent = "Camera access denied. Use Option 2.";
+                stopCamera();
             });
         } catch (err) {
-            status.textContent = "Camera not available. Use Option 2 (Upload).";
+            status.textContent = "Camera not available. Use Option 2.";
             stopCamera();
         }
     }
@@ -540,17 +520,16 @@ if (!is_array($two_factor_tokens)) {
             camInstance.stop().then(() => {
                 document.getElementById('viewport').innerHTML = "";
                 camInstance = null;
-                status.textContent = "Camera stopped. Use Option 2 (Upload) instead.";
+                status.textContent = "Camera stopped.";
             });
         }
     }
 
     // ============================================
-    // QR UPLOAD (jsQR) - WORKS ON BOTH XAMPP AND CLOUD RUN
+    // QR UPLOAD (jsQR) - WORKS EVERYWHERE
     // ============================================
     const fileInput = document.getElementById('qr-file-input');
     const dropZone = document.getElementById('drop-zone');
-    const status = document.getElementById('status');
 
     document.getElementById('qr-file-input').addEventListener('change', function(e) {
         if (e.target.files.length) {
@@ -584,10 +563,8 @@ if (!is_array($two_factor_tokens)) {
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                
                 canvas.width = img.naturalWidth || img.width;
                 canvas.height = img.naturalHeight || img.height;
-                
                 ctx.drawImage(img, 0, 0);
                 const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(data.data, data.width, data.height);
@@ -608,9 +585,7 @@ if (!is_array($two_factor_tokens)) {
     // ============================================
     const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
     function bytesToBase32(buffer) {
-        let value = 0;
-        let bits = 0;
-        let output = '';
+        let value = 0, bits = 0, output = '';
         for (let i = 0; i < buffer.length; i++) {
             value = (value << 8) | buffer[i];
             bits += 8;
@@ -638,8 +613,7 @@ if (!is_array($two_factor_tokens)) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            let accounts = [];
-            let ptr = 0;
+            let accounts = [], ptr = 0;
             while (ptr < bytes.length) {
                 let tag = bytes[ptr++];
                 let wireType = tag & 7;
@@ -687,7 +661,7 @@ if (!is_array($two_factor_tokens)) {
             }
             return accounts.length > 0 ? accounts : null;
         } catch (e) {
-            console.error("Custom parser error:", e);
+            console.error("Migration parser error:", e);
             return null;
         }
     }
@@ -698,6 +672,7 @@ if (!is_array($two_factor_tokens)) {
     function handleDecodedText(text, source) {
         status.innerHTML = "Decoded: <code>" + text.substring(0, 60) + "...</code>";
 
+        // Migration QR
         if (text.toLowerCase().startsWith('otpauth-migration://')) {
             status.textContent = "Parsing migration data...";
             let accounts = parseGoogleMigration(text);
@@ -710,11 +685,12 @@ if (!is_array($two_factor_tokens)) {
                     document.getElementById('qr-submit-form').submit();
                 }, 1200);
             } else {
-                status.textContent = "Could not parse migration QR code structure.";
+                status.textContent = "Could not parse migration QR.";
             }
             return;
         }
 
+        // Standard TOTP
         let match = text.match(/secret=([A-Z2-7]{16,32})/i);
         if (match) {
             let label = "Imported Token";
@@ -732,7 +708,7 @@ if (!is_array($two_factor_tokens)) {
                 document.getElementById('final-seed').value = rawMatch[1].toUpperCase();
                 document.getElementById('qr-submit-form').submit();
             } else {
-                status.textContent = "No valid secret found in QR code.";
+                status.textContent = "No valid secret found.";
             }
         }
     }
@@ -794,8 +770,7 @@ if (!is_array($two_factor_tokens)) {
         const timeLeft = 30 - remainder;
 
         document.getElementById('timer-display').innerText = "Codes change in: " + timeLeft + "s";
-        const percentage = (timeLeft / 30) * 100;
-        document.getElementById('timer-bar').style.width = percentage + "%";
+        document.getElementById('timer-bar').style.width = (timeLeft / 30) * 100 + "%";
 
         document.querySelectorAll('[id^="code-"]').forEach(el => {
             const seed = el.getAttribute('data-seed');
