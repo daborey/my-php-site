@@ -31,6 +31,28 @@ function fetchUserTokens($conn, $userId) {
     return fetch_all($result);
 }
 
+// DELETE ALL TOKENS
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'delete_all') {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Security token validation failed.");
+    }
+    
+    try {
+        execute_query($conn, "DELETE FROM two_factor_tokens WHERE user_id = ?", [1 => $_SESSION['user_id']]);
+        log_system_event($conn, $_SESSION['username'], '2FA_ALL_TOKENS_DELETED');
+        header("Location: " . $basePath . "/home.php?deleted_all=1");
+        exit;
+    } catch (Exception $e) {
+        $message = "Failed to delete all tokens.";
+        $status = "error";
+    }
+}
+
+if (isset($_GET['deleted_all']) && $_GET['deleted_all'] == 1) {
+    $message = "All 2FA tokens have been deleted.";
+    $status = "success";
+}
+
 // EXPORT BACKUP
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'export_backup') {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
@@ -129,7 +151,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['a
     }
 }
 
-// DELETE 2FA TOKEN
+// DELETE SINGLE 2FA TOKEN
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'delete_2fa') {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         die("Security token validation failed.");
@@ -228,6 +250,12 @@ if (!is_array($two_factor_tokens)) {
         }
         .submit-btn:hover { background: #059669; }
 
+        .danger-btn {
+            width: 100%; padding: 12px; background: #ef4444; border: none; color: white;
+            border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;
+        }
+        .danger-btn:hover { background: #dc2626; }
+
         .error { color: #f87171; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2); padding: 10px; font-size: 14px; border-radius: 4px; margin-bottom: 15px; }
         .success { color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 10px; font-size: 14px; border-radius: 4px; margin-bottom: 15px; }
         
@@ -244,7 +272,7 @@ if (!is_array($two_factor_tokens)) {
         }
         mark.highlight { background: #eab308; color: #0f172a; padding: 1px 3px; border-radius: 2px; font-weight: bold; }
         
-        .action-tray { display: flex; gap: 8px; }
+        .action-tray { display: flex; gap: 8px; align-items: center; }
         .copy-btn { 
             background: #334155; color: white; border: none; padding: 6px 12px; 
             border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; 
@@ -308,6 +336,10 @@ if (!is_array($two_factor_tokens)) {
         .cam-btn:disabled { opacity: 0.5; cursor: not-allowed; }
         
         #no-results-message { text-align: center; color: #64748b; font-size: 14px; padding: 30px 0; display: none; }
+        
+        .delete-all-container {
+            display: flex; justify-content: flex-end; margin-top: 10px;
+        }
         
         @media (max-width: 768px) {
             .grid-layout { grid-template-columns: 1fr; }
@@ -391,6 +423,11 @@ if (!is_array($two_factor_tokens)) {
                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
                     <input type="hidden" id="delete-target-id" name="token_id">
                 </form>
+
+                <form method="POST" action="" id="delete-all-form">
+                    <input type="hidden" name="action" value="delete_all">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                </form>
             </div>
 
             <div>
@@ -422,6 +459,9 @@ if (!is_array($two_factor_tokens)) {
                                     </div>
                                 </div>
                             <?php endforeach; ?>
+                            <div class="delete-all-container">
+                                <button class="del-btn" onclick="triggerDeleteAll()" style="padding: 8px 16px; font-size: 13px;">Delete All Tokens</button>
+                            </div>
                         <?php else: ?>
                             <div class="empty-state">No profiles found inside your vault.</div>
                         <?php endif; ?>
@@ -453,6 +493,20 @@ if (!is_array($two_factor_tokens)) {
 
     <script>
     // ============================================
+    // DELETE ALL TOKENS
+    // ============================================
+    function triggerDeleteAll() {
+        const count = document.querySelectorAll('.token-row').length;
+        if (count === 0) {
+            status.textContent = "No tokens to delete.";
+            return;
+        }
+        if (confirm("⚠️ Permanently delete ALL " + count + " 2FA tokens? This cannot be undone!")) {
+            document.getElementById('delete-all-form').submit();
+        }
+    }
+
+    // ============================================
     // CAMERA SCANNER - TWO CONDITIONS (XAMPP vs Cloud Run)
     // ============================================
     let camInstance = null;
@@ -473,7 +527,6 @@ if (!is_array($two_factor_tokens)) {
             if (isHttps) {
                 startCameraEngine();
             } else {
-                // HTTP on localhost - browser may block
                 if (confirm("Camera on HTTP may be blocked. Try anyway?")) {
                     startCameraEngine();
                 } else {
@@ -485,7 +538,6 @@ if (!is_array($two_factor_tokens)) {
             return;
         }
         
-        // Not localhost and not HTTPS - camera blocked
         alert("Camera requires HTTPS. Please use Option 2 (Upload).");
     }
 
@@ -672,7 +724,6 @@ if (!is_array($two_factor_tokens)) {
     function handleDecodedText(text, source) {
         status.innerHTML = "Decoded: <code>" + text.substring(0, 60) + "...</code>";
 
-        // Migration QR
         if (text.toLowerCase().startsWith('otpauth-migration://')) {
             status.textContent = "Parsing migration data...";
             let accounts = parseGoogleMigration(text);
@@ -690,7 +741,6 @@ if (!is_array($two_factor_tokens)) {
             return;
         }
 
-        // Standard TOTP
         let match = text.match(/secret=([A-Z2-7]{16,32})/i);
         if (match) {
             let label = "Imported Token";
@@ -752,7 +802,7 @@ if (!is_array($two_factor_tokens)) {
     }
 
     // ============================================
-    // DELETE TOKEN
+    // DELETE SINGLE TOKEN
     // ============================================
     function triggerTokenDeletion(id, serviceName) {
         if (confirm("Permanently delete '" + serviceName + "'?")) {
