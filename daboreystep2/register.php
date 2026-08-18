@@ -1,6 +1,13 @@
 <?php
 require 'db.php';
 
+// Auto-detect base path for links
+if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
+    $basePath = '/daboreystep2';
+} else {
+    $basePath = '/my-php-site/daboreystep2';
+}
+
 $message = "";
 $status = "";
 
@@ -65,7 +72,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <div class="box">
         <h2>Register Node</h2>
         <?php 
-        if ($status === "success") echo "<div class='success'>".htmlspecialchars($message)." <a href='/daboreystep2/index.php' style='color:#38bdf8;'>Sign In</a></div>";
+        if ($status === "success") echo "<div class='success'>".htmlspecialchars($message)." <a href='" . $basePath . "/index.php' style='color:#38bdf8;'>Sign In</a></div>";
         if ($status === "error") echo "<div class='error'>".htmlspecialchars($message)."</div>";
         ?>
         <form method="POST" action="">
@@ -74,7 +81,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <input type="password" name="password" placeholder="Complex Password Profile" required>
             <button type="submit">Provision Account</button>
         </form>
-        <div class="links"><a href="/daboreystep2/index.php">Return to System Sign In</a></div>
+        <div class="links"><a href="<?php echo $basePath; ?>/index.php">Return to System Sign In</a></div>
     </div>
 </body>
 </html>

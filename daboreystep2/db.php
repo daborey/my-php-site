@@ -1,8 +1,4 @@
 <?php
-// Cloud Run production settings
-ini_set('display_errors', 0);
-error_reporting(E_ALL);
-
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1); 
     ini_set('session.use_only_cookies', 1);
@@ -10,8 +6,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Cloud Run SQLite path with persistent storage
-$dbPath = '/mnt/storage/daboreypass.db';
+// Auto-detect environment
+if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
+    $dbPath = '/mnt/storage/daboreypass.db';
+} else {
+    $dbPath = __DIR__ . '/daboreypass.db';
+}
 
 try {
     $conn = new SQLite3($dbPath);

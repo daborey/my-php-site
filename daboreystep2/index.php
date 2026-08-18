@@ -1,8 +1,15 @@
 <?php
 require 'db.php';
 
+// Auto-detect base path for links
+if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
+    $basePath = '/daboreystep2';
+} else {
+    $basePath = '/my-php-site/daboreystep2';
+}
+
 if (isset($_SESSION['user_id'])) {
-    header("Location: /daboreystep2/home.php");
+    header("Location: " . $basePath . "/home.php");
     exit;
 }
 
@@ -35,7 +42,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['last_activity'] = time();
                 
                 log_system_event($conn, $username, 'LOGIN_SUCCESSFUL');
-                header("Location: /daboreystep2/home.php");
+                header("Location: " . $basePath . "/home.php");
                 exit;
             } else {
                 $login_attempts = $user['login_attempts'] + 1;
@@ -84,7 +91,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Verify Credentials</button>
         </form>
-        <div class="links"><a href="/daboreystep2/register.php">Register System Identity</a></div>
+        <div class="links"><a href="<?php echo $basePath; ?>/register.php">Register System Identity</a></div>
     </div>
 </body>
 </html>

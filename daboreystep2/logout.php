@@ -1,6 +1,13 @@
 <?php
 require 'db.php';
 
+// Auto-detect base path for redirect
+if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
+    $basePath = '/daboreystep2';
+} else {
+    $basePath = '/my-php-site/daboreystep2';
+}
+
 if (isset($_SESSION['username'])) {
     log_system_event($conn, $_SESSION['username'], 'USER_LOGOUT_EXPLICIT');
 }
@@ -16,6 +23,6 @@ if (ini_get("session.use_cookies")) {
 }
 
 session_destroy();
-header("Location: /daboreystep2/index.php");
+header("Location: " . $basePath . "/index.php");
 exit;
 ?>
