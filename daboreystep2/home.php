@@ -1,12 +1,7 @@
 <?php
 require 'db.php';
 
-// Auto-detect base path
-if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
-    $basePath = '/daboreystep2';
-} else {
-    $basePath = '/my-php-site/daboreystep2';
-}
+$basePath = $GLOBALS['basePath'];
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: " . $basePath . "/index.php");
@@ -215,148 +210,46 @@ if (!is_array($two_factor_tokens)) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DaboreyPass - 2FA Control Console</title>
+    
+    <!-- External CSS -->
+    <link rel="stylesheet" href="<?php echo $basePath; ?>/style.css">
+    
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-        .container { max-width: 1100px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 30px; }
-        h1 { color: #38bdf8; margin: 0; font-size: 28px; }
-        .logout-btn { padding: 8px 16px; background: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; }
-        .logout-btn:hover { background: #dc2626; }
+        .device-hint { font-size: 12px; color: #64748b; margin-top: 5px; }
+        .device-hint .icon { font-size: 16px; }
+        #start-cam-btn { transition: all 0.3s ease; }
+        #start-cam-btn .btn-label { display: inline; }
+        #start-cam-btn .btn-icon { display: inline; }
         
-        .grid-layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px; }
-        .box { background: #1e293b; padding: 25px; border-radius: 8px; border: 1px solid #334155; height: fit-content; margin-bottom: 25px; }
-        h3 { margin-top: 0; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 15px; }
-        
-        label { font-size: 13px; color: #94a3b8; display: block; margin-top: 10px; }
-        input[type="text"], input[type="file"] { 
-            width: 100%; padding: 10px; margin: 6px 0 14px 0; box-sizing: border-box; 
-            border: 1px solid #475569; border-radius: 4px; background: #0f172a; color: #fff; 
-        }
-        input[type="text"]:focus { outline: none; border-color: #38bdf8; }
-
-        .dropzone-area { 
-            border: 2px dashed #475569; background: #0f172a; border-radius: 6px; 
-            padding: 20px; text-align: center; cursor: pointer; color: #94a3b8; 
-            transition: all 0.3s ease;
-        }
-        .dropzone-area:hover, .dropzone-area.dragover { border-color: #38bdf8; color: #f8fafc; background: rgba(56, 189, 248, 0.05); }
-        .dropzone-area input { display: none; }
-
-        .submit-btn { 
-            width: 100%; padding: 12px; background: #10b981; border: none; color: white; 
-            border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;
-        }
-        .submit-btn:hover { background: #059669; }
-
-        .danger-btn {
-            width: 100%; padding: 12px; background: #ef4444; border: none; color: white;
-            border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;
-        }
-        .danger-btn:hover { background: #dc2626; }
-
-        .error { color: #f87171; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2); padding: 10px; font-size: 14px; border-radius: 4px; margin-bottom: 15px; }
-        .success { color: #34d399; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.2); padding: 10px; font-size: 14px; border-radius: 4px; margin-bottom: 15px; }
-        
-        .token-row { 
-            background: #0f172a; border: 1px solid #334155; border-radius: 6px; 
-            padding: 15px; display: flex; justify-content: space-between; align-items: center; 
-            margin-bottom: 10px; transition: all 0.15s ease;
-        }
-        .token-row:hover { border-color: #475569; }
-        .token-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; font-weight: bold; }
-        .token-code { 
-            font-size: 28px; color: #38bdf8; font-family: 'Courier New', monospace; 
-            font-weight: bold; letter-spacing: 3px; 
-        }
-        mark.highlight { background: #eab308; color: #0f172a; padding: 1px 3px; border-radius: 2px; font-weight: bold; }
-        
-        .action-tray { display: flex; gap: 8px; align-items: center; }
-        .copy-btn { 
-            background: #334155; color: white; border: none; padding: 6px 12px; 
-            border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; 
-        }
-        .copy-btn:hover { background: #475569; }
-        .del-btn { 
-            background: rgba(239, 68, 68, 0.1); color: #f87171; 
-            border: 1px solid rgba(239, 68, 68, 0.2); padding: 5px 12px; 
-            border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; 
-        }
-        .del-btn:hover { background: #ef4444; color: white; }
-
-        .progress-wrapper { 
-            display: flex; align-items: center; justify-content: space-between; 
-            margin-bottom: 20px; background: rgba(56, 189, 248, 0.05); 
-            padding: 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.1); 
-            font-size: 13px;
-        }
-        .bar-container { background: #334155; height: 6px; width: 120px; border-radius: 3px; overflow: hidden; }
-        .bar-fill { background: #38bdf8; height: 100%; width: 100%; transition: width 1s linear; }
-        
-        .search-container { position: relative; margin-bottom: 20px; }
-        .search-input { 
-            width: 100%; padding: 12px 14px; box-sizing: border-box; 
-            border: 1px solid #0284c7; border-radius: 6px; background: #0f172a; 
-            color: #fff; font-size: 14px; margin: 0; 
-        }
-        .search-input:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.2); }
-        
-        #status { 
-            margin-top: 10px; color: #94a3b8; font-size: 13px; text-align: center; 
-            word-break: break-all; min-height: 20px;
-        }
-        #status code { 
-            background: rgba(15, 23, 42, 0.8); padding: 2px 6px; border-radius: 3px; 
-            font-size: 11px; display: inline-block; max-width: 100%;
-        }
-        
-        .empty-state { text-align: center; color: #64748b; font-size: 14px; padding: 30px 0; }
-        
-        .backup-tray { 
-            display: flex; flex-direction: column; gap: 15px; 
-            border-top: 2px dashed #334155; padding-top: 20px; margin-top: 25px; 
-        }
-        .btn-backup { 
-            background: #4f46e5; border: none; color: white; font-weight: bold; 
-            padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; 
-            font-size: 14px; text-align: center; display: block; text-decoration: none;
-        }
-        .btn-backup:hover { background: #4338ca; }
-        .import-box-area { 
-            background: #0f172a; border: 1px dashed #475569; border-radius: 6px; 
-            padding: 15px; text-align: center; cursor: pointer; color: #94a3b8; font-size: 13px; 
-        }
-        .import-box-area:hover { border-color: #a855f7; color: #fff; }
-
-        .viewport-box { width: 100%; min-height: 200px; background: #0f172a; border-radius: 6px; border: 1px solid #475569; overflow: hidden; margin-bottom: 15px; margin-top: 5px; }
-        .cam-segment { background: rgba(15, 23, 42, 0.4); padding: 15px; border-radius: 6px; border: 1px solid #334155; margin-bottom: 20px; }
-        .cam-btn { background: #0284c7; color: white; border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
-        .cam-btn.stop { background: #ef4444; }
-        .cam-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        #no-results-message { text-align: center; color: #64748b; font-size: 14px; padding: 30px 0; display: none; }
-        
-        .delete-all-container {
-            display: flex; justify-content: flex-end; margin-top: 10px;
-        }
-        
-        @media (max-width: 768px) {
-            .grid-layout { grid-template-columns: 1fr; }
-            .token-row { flex-direction: column; align-items: stretch; gap: 10px; }
-            .action-tray { justify-content: flex-end; }
+        @media (max-width: 480px) {
+            #start-cam-btn .btn-label { display: none; }
+            #start-cam-btn .btn-icon { font-size: 18px; }
         }
     </style>
+    
+    <!-- External Libraries -->
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="https://cdn.jsdelivr.net/npm/otpauth@9.3.6/dist/otpauth.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    
+    <!-- External JavaScript -->
+    <script>
+        // Pass PHP environment to JavaScript
+        const ENVIRONMENT = '<?php echo ENVIRONMENT; ?>';
+        const BASE_PATH = '<?php echo $basePath; ?>';
+    </script>
+    <script src="<?php echo $basePath; ?>/script.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div>
                 <h1>DaboreyPass 2FA</h1>
-                <span style="color:#94a3b8; font-size:14px;">Logged in as: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong></span>
+                <span class="header-user">Logged in as: <strong><?php echo htmlspecialchars($_SESSION['username']); ?></strong></span>
+                <span style="font-size:11px; color:#64748b; margin-left:10px;">
+                    [<?php echo ENVIRONMENT === 'cloud' ? '☁️ Cloud' : '💻 Local'; ?>]
+                </span>
             </div>
             <a href="<?php echo $basePath; ?>/logout.php" class="logout-btn">Logout</a>
         </div>
@@ -372,12 +265,25 @@ if (!is_array($two_factor_tokens)) {
                 <div class="box">
                     <h3>Option 1: Scan QR Code (Camera)</h3>
                     <div class="cam-segment">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size:14px; font-weight:bold; color:#f8fafc;">📷 Live Camera</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <span style="font-size:14px; font-weight:bold; color:#f8fafc;">
+                                <span id="camera-icon">📷</span> 
+                                <span id="camera-label">Live Camera</span>
+                            </span>
                             <div>
-                                <button type="button" class="cam-btn" id="start-cam-btn" onclick="startCamera()">Open Camera</button>
-                                <button type="button" class="cam-btn stop" id="stop-cam-btn" onclick="stopCamera()" disabled>Close</button>
+                                <button type="button" class="cam-btn" id="start-cam-btn" onclick="startCamera()">
+                                    <span class="btn-icon">📷</span>
+                                    <span class="btn-label">Open</span>
+                                </button>
+                                <button type="button" class="cam-btn stop" id="stop-cam-btn" onclick="stopCamera()" disabled>
+                                    <span class="btn-icon">✕</span>
+                                    <span class="btn-label">Close</span>
+                                </button>
                             </div>
+                        </div>
+                        <div id="device-hint" class="device-hint">
+                            <span class="icon">📱</span> 
+                            <span id="device-message">Detecting device...</span>
                         </div>
                         <div id="viewport" class="viewport-box"></div>
                     </div>
@@ -460,7 +366,7 @@ if (!is_array($two_factor_tokens)) {
                                 </div>
                             <?php endforeach; ?>
                             <div class="delete-all-container">
-                                <button class="del-btn" onclick="triggerDeleteAll()" style="padding: 8px 16px; font-size: 13px;">Delete All Tokens</button>
+                                <button class="del-btn" onclick="triggerDeleteAll()" style="padding: 8px 16px; font-size: 13px;">🗑️ Delete All Tokens</button>
                             </div>
                         <?php else: ?>
                             <div class="empty-state">No profiles found inside your vault.</div>
@@ -490,378 +396,5 @@ if (!is_array($two_factor_tokens)) {
             </div>
         </div>
     </div>
-
-    <script>
-    // ============================================
-    // DELETE ALL TOKENS
-    // ============================================
-    function triggerDeleteAll() {
-        const count = document.querySelectorAll('.token-row').length;
-        if (count === 0) {
-            status.textContent = "No tokens to delete.";
-            return;
-        }
-        if (confirm("⚠️ Permanently delete ALL " + count + " 2FA tokens? This cannot be undone!")) {
-            document.getElementById('delete-all-form').submit();
-        }
-    }
-
-    // ============================================
-    // CAMERA SCANNER - TWO CONDITIONS (XAMPP vs Cloud Run)
-    // ============================================
-    let camInstance = null;
-    const status = document.getElementById('status');
-
-    function startCamera() {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const isHttps = window.location.protocol === 'https:';
-        
-        // Condition 1: Cloud Run (HTTPS) - works
-        if (!isLocal && isHttps) {
-            startCameraEngine();
-            return;
-        }
-        
-        // Condition 2: Localhost - try camera
-        if (isLocal) {
-            if (isHttps) {
-                startCameraEngine();
-            } else {
-                if (confirm("Camera on HTTP may be blocked. Try anyway?")) {
-                    startCameraEngine();
-                } else {
-                    document.getElementById('start-cam-btn').disabled = false;
-                    document.getElementById('stop-cam-btn').disabled = true;
-                    status.textContent = "Use Option 2 (Upload) instead.";
-                }
-            }
-            return;
-        }
-        
-        alert("Camera requires HTTPS. Please use Option 2 (Upload).");
-    }
-
-    function startCameraEngine() {
-        document.getElementById('start-cam-btn').disabled = true;
-        document.getElementById('stop-cam-btn').disabled = false;
-        status.textContent = "Starting camera...";
-        
-        try {
-            camInstance = new Html5Qrcode("viewport");
-            camInstance.start(
-                { facingMode: "environment" },
-                { fps: 15, qrbox: 180 },
-                (decodedText) => { handleDecodedText(decodedText, 'camera'); },
-                () => {}
-            ).then(() => {
-                status.textContent = "Camera ready - scanning...";
-            }).catch((err) => {
-                status.textContent = "Camera access denied. Use Option 2.";
-                stopCamera();
-            });
-        } catch (err) {
-            status.textContent = "Camera not available. Use Option 2.";
-            stopCamera();
-        }
-    }
-
-    function stopCamera() {
-        document.getElementById('start-cam-btn').disabled = false;
-        document.getElementById('stop-cam-btn').disabled = true;
-        if (camInstance) {
-            camInstance.stop().then(() => {
-                document.getElementById('viewport').innerHTML = "";
-                camInstance = null;
-                status.textContent = "Camera stopped.";
-            });
-        }
-    }
-
-    // ============================================
-    // QR UPLOAD (jsQR) - WORKS EVERYWHERE
-    // ============================================
-    const fileInput = document.getElementById('qr-file-input');
-    const dropZone = document.getElementById('drop-zone');
-
-    document.getElementById('qr-file-input').addEventListener('change', function(e) {
-        if (e.target.files.length) {
-            processFile(e.target.files[0]);
-        }
-    });
-
-    document.getElementById('drop-zone').addEventListener('dragover', function(e) {
-        e.preventDefault();
-        this.classList.add('dragover');
-    });
-
-    document.getElementById('drop-zone').addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        this.classList.remove('dragover');
-    });
-
-    document.getElementById('drop-zone').addEventListener('drop', function(e) {
-        e.preventDefault();
-        this.classList.remove('dragover');
-        if (e.dataTransfer.files.length) {
-            processFile(e.dataTransfer.files[0]);
-        }
-    });
-
-    function processFile(file) {
-        status.textContent = "Scanning...";
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.naturalWidth || img.width;
-                canvas.height = img.naturalHeight || img.height;
-                ctx.drawImage(img, 0, 0);
-                const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(data.data, data.width, data.height);
-                
-                if (code && code.data) {
-                    handleDecodedText(code.data, 'upload');
-                } else {
-                    status.textContent = "No QR code found. Make sure the image is clear.";
-                }
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
-
-    // ============================================
-    // MIGRATION QR PARSER
-    // ============================================
-    const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    function bytesToBase32(buffer) {
-        let value = 0, bits = 0, output = '';
-        for (let i = 0; i < buffer.length; i++) {
-            value = (value << 8) | buffer[i];
-            bits += 8;
-            while (bits >= 5) {
-                output += BASE32_CHARS[(value >>> (bits - 5)) & 31];
-                bits -= 5;
-            }
-        }
-        if (bits > 0) {
-            output += BASE32_CHARS[(value << (5 - bits)) & 31];
-        }
-        return output;
-    }
-
-    function parseGoogleMigration(text) {
-        try {
-            let url = new URL(text);
-            if (url.protocol !== 'otpauth-migration:') return null;
-            let dataParam = url.searchParams.get('data');
-            if (!dataParam) return null;
-
-            let binaryString = atob(dataParam.replace(/-/g, '+').replace(/_/g, '/'));
-            let bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            let accounts = [], ptr = 0;
-            while (ptr < bytes.length) {
-                let tag = bytes[ptr++];
-                let wireType = tag & 7;
-                let fieldNumber = tag >> 3;
-
-                if (wireType === 2) {
-                    let length = bytes[ptr++];
-                    let fieldData = bytes.subarray(ptr, ptr + length);
-                    ptr += length;
-
-                    if (fieldNumber === 1) {
-                        let secret = '', name = '', issuer = '';
-                        let innerPtr = 0;
-                        while (innerPtr < fieldData.length) {
-                            let innerTag = fieldData[innerPtr++];
-                            let innerWire = innerTag & 7;
-                            let innerField = innerTag >> 3;
-
-                            if (innerWire === 2) {
-                                let innerLen = fieldData[innerPtr++];
-                                let valBytes = fieldData.subarray(innerPtr, innerPtr + innerLen);
-                                innerPtr += innerLen;
-
-                                if (innerField === 1) {
-                                    secret = bytesToBase32(valBytes);
-                                } else if (innerField === 2) {
-                                    name = new TextDecoder().decode(valBytes);
-                                } else if (innerField === 3) {
-                                    issuer = new TextDecoder().decode(valBytes);
-                                }
-                            } else if (innerWire === 0) {
-                                innerPtr++;
-                            }
-                        }
-                        if (secret) {
-                            accounts.push({
-                                secret: secret,
-                                label: issuer ? (name ? issuer + ':' + name : issuer) : (name || 'Imported Account')
-                            });
-                        }
-                    }
-                } else if (wireType === 0) {
-                    ptr++;
-                }
-            }
-            return accounts.length > 0 ? accounts : null;
-        } catch (e) {
-            console.error("Migration parser error:", e);
-            return null;
-        }
-    }
-
-    // ============================================
-    // SHARED DECODER
-    // ============================================
-    function handleDecodedText(text, source) {
-        status.innerHTML = "Decoded: <code>" + text.substring(0, 60) + "...</code>";
-
-        if (text.toLowerCase().startsWith('otpauth-migration://')) {
-            status.textContent = "Parsing migration data...";
-            let accounts = parseGoogleMigration(text);
-
-            if (accounts && accounts.length > 0) {
-                status.innerHTML = "✅ Found " + accounts.length + " account(s). Saving first account...";
-                document.getElementById('final-name').value = accounts[0].label;
-                document.getElementById('final-seed').value = accounts[0].secret;
-                setTimeout(() => {
-                    document.getElementById('qr-submit-form').submit();
-                }, 1200);
-            } else {
-                status.textContent = "Could not parse migration QR.";
-            }
-            return;
-        }
-
-        let match = text.match(/secret=([A-Z2-7]{16,32})/i);
-        if (match) {
-            let label = "Imported Token";
-            let labelMatch = text.match(/(?:label|issuer)=([^&]+)/i);
-            if (labelMatch) {
-                label = decodeURIComponent(labelMatch[1]);
-            }
-            document.getElementById('final-name').value = label;
-            document.getElementById('final-seed').value = match[1].toUpperCase();
-            document.getElementById('qr-submit-form').submit();
-        } else {
-            let rawMatch = text.match(/([A-Z2-7]{16,32})/);
-            if (rawMatch) {
-                document.getElementById('final-name').value = 'Imported';
-                document.getElementById('final-seed').value = rawMatch[1].toUpperCase();
-                document.getElementById('qr-submit-form').submit();
-            } else {
-                status.textContent = "No valid secret found.";
-            }
-        }
-    }
-
-    // ============================================
-    // SEARCH FILTER
-    // ============================================
-    const searchBar = document.getElementById('live-search-bar');
-
-    if (searchBar) {
-        searchBar.addEventListener('input', function() {
-            const query = this.value.trim().toLowerCase();
-            const rows = document.querySelectorAll('.token-row');
-            const noResultsMsg = document.getElementById('no-results-message');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                const labelNode = row.querySelector('.token-label');
-                const originalText = labelNode.getAttribute('data-raw-text');
-
-                if (!query) {
-                    row.style.display = 'flex';
-                    labelNode.textContent = originalText;
-                    visibleCount++;
-                } else {
-                    if (originalText.toLowerCase().includes(query)) {
-                        row.style.display = 'flex';
-                        visibleCount++;
-                        const regex = new RegExp(`(${query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
-                        labelNode.innerHTML = originalText.replace(regex, '<mark class="highlight">$1</mark>');
-                    } else {
-                        row.style.display = 'none';
-                    }
-                }
-            });
-
-            if (noResultsMsg) {
-                noResultsMsg.style.display = (rows.length > 0 && visibleCount === 0) ? 'block' : 'none';
-            }
-        });
-    }
-
-    // ============================================
-    // DELETE SINGLE TOKEN
-    // ============================================
-    function triggerTokenDeletion(id, serviceName) {
-        if (confirm("Permanently delete '" + serviceName + "'?")) {
-            document.getElementById('delete-target-id').value = id;
-            document.getElementById('delete-token-form').submit();
-        }
-    }
-
-    // ============================================
-    // TOTP CODE GENERATION & CLOCK
-    // ============================================
-    function updateTokensAndClock() {
-        const epoch = Math.floor(Date.now() / 1000);
-        const remainder = epoch % 30;
-        const timeLeft = 30 - remainder;
-
-        document.getElementById('timer-display').innerText = "Codes change in: " + timeLeft + "s";
-        document.getElementById('timer-bar').style.width = (timeLeft / 30) * 100 + "%";
-
-        document.querySelectorAll('[id^="code-"]').forEach(el => {
-            const seed = el.getAttribute('data-seed');
-            try {
-                if (typeof OTPAuth !== 'undefined') {
-                    const totp = new OTPAuth.TOTP({ secret: seed });
-                    const token = totp.generate();
-                    el.innerText = token.substr(0, 3) + ' ' + token.substr(3);
-                }
-            } catch(e) {}
-        });
-    }
-
-    function loadOTPAuth() {
-        if (typeof OTPAuth === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/otpauth@9.3.6/dist/otpauth.umd.min.js';
-            script.onload = () => {
-                updateTokensAndClock();
-                setInterval(updateTokensAndClock, 1000);
-            };
-            document.head.appendChild(script);
-        } else {
-            updateTokensAndClock();
-            setInterval(updateTokensAndClock, 1000);
-        }
-    }
-
-    loadOTPAuth();
-
-    // ============================================
-    // COPY TOKEN
-    // ============================================
-    function copyTokenValue(id, btn) {
-        const code = document.getElementById(id).innerText.replace(/\s/g, '');
-        navigator.clipboard.writeText(code).then(() => {
-            const old = btn.innerText;
-            btn.innerText = "Copied!";
-            setTimeout(() => { btn.innerText = old; }, 1200);
-        });
-    }
-    </script>
 </body>
 </html>

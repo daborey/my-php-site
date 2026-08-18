@@ -1,12 +1,8 @@
 <?php
 require 'db.php';
 
-// Auto-detect base path for links
-if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
-    $basePath = '/daboreystep2';
-} else {
-    $basePath = '/my-php-site/daboreystep2';
-}
+// Use global basePath
+$basePath = $GLOBALS['basePath'];
 
 if (isset($_SESSION['user_id'])) {
     header("Location: " . $basePath . "/home.php");

@@ -1,13 +1,7 @@
 <?php
 require 'db.php';
 
-// Auto-detect base path for links
-if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
-    $basePath = '/daboreystep2';
-} else {
-    $basePath = '/my-php-site/daboreystep2';
-}
-
+$basePath = $GLOBALS['basePath'];
 $message = "";
 $status = "";
 
