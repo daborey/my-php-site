@@ -4,8 +4,10 @@ require 'db.php';
 // Auto-detect base path
 if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
     $basePath = '/daboreystep2';
+    $isCloudRun = true;
 } else {
     $basePath = '/my-php-site/daboreystep2';
+    $isCloudRun = false;
 }
 
 if (!isset($_SESSION['user_id'])) {
@@ -453,20 +455,82 @@ if (!is_array($two_factor_tokens)) {
 
     <script>
     // ============================================
-    // CAMERA SCANNER (html5-qrcode)
+    // ENVIRONMENT DETECTION
+    // ============================================
+    const isCloudRun = <?php echo $isCloudRun ? 'true' : 'false'; ?>;
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // ============================================
+    // CAMERA SCANNER (html5-qrcode) - WORKS ON CLOUD RUN ONLY
     // ============================================
     let camInstance = null;
 
     function startCamera() {
+        // Condition 1: Check if on Cloud Run (HTTPS) - works
+        if (isCloudRun) {
+            // Cloud Run - HTTPS, camera works
+            startCameraEngine();
+            return;
+        }
+        
+        // Condition 2: Check if on localhost with HTTPS or HTTP
+        if (isLocal) {
+            // Localhost - try camera anyway (may work on some browsers)
+            if (window.location.protocol === 'https:') {
+                startCameraEngine();
+            } else {
+                // HTTP on localhost - browser may block camera
+                if (confirm("Camera access on HTTP may be blocked. Click OK to try, or Cancel to use Option 2 (Upload).")) {
+                    startCameraEngine();
+                } else {
+                    document.getElementById('start-cam-btn').disabled = false;
+                    document.getElementById('stop-cam-btn').disabled = true;
+                    status.textContent = "Camera cancelled. Use Option 2 (Upload) instead.";
+                }
+            }
+            return;
+        }
+        
+        // Condition 3: Not localhost and not Cloud Run - likely HTTP without HTTPS
+        if (window.location.protocol !== 'https:') {
+            alert("Camera access requires HTTPS. Please use Option 2 (Upload) instead.");
+            return;
+        }
+        
+        startCameraEngine();
+    }
+
+    function startCameraEngine() {
         document.getElementById('start-cam-btn').disabled = true;
         document.getElementById('stop-cam-btn').disabled = false;
-        camInstance = new Html5Qrcode("viewport");
-        camInstance.start(
-            { facingMode: "environment" },
-            { fps: 15, qrbox: 180 },
-            (decodedText) => { handleDecodedText(decodedText, 'camera'); },
-            () => {}
-        ).catch(() => { alert("Camera access denied or unavailable."); stopCamera(); });
+        status.textContent = "Starting camera...";
+        
+        try {
+            camInstance = new Html5Qrcode("viewport");
+            camInstance.start(
+                { facingMode: "environment" },
+                { 
+                    fps: 15, 
+                    qrbox: 180,
+                    aspectRatio: 1.0
+                },
+                (decodedText) => { 
+                    handleDecodedText(decodedText, 'camera'); 
+                },
+                (error) => {
+                    // Ignore scan errors - keep scanning
+                }
+            ).then(() => {
+                status.textContent = "Camera ready - scanning for QR codes...";
+            }).catch((err) => { 
+                console.error("Camera start error:", err);
+                status.textContent = "Camera access denied. Use Option 2 (Upload) instead.";
+                stopCamera(); 
+            });
+        } catch (err) {
+            status.textContent = "Camera not available. Use Option 2 (Upload).";
+            stopCamera();
+        }
     }
 
     function stopCamera() {
@@ -476,12 +540,13 @@ if (!is_array($two_factor_tokens)) {
             camInstance.stop().then(() => {
                 document.getElementById('viewport').innerHTML = "";
                 camInstance = null;
+                status.textContent = "Camera stopped. Use Option 2 (Upload) instead.";
             });
         }
     }
 
     // ============================================
-    // QR UPLOAD (jsQR)
+    // QR UPLOAD (jsQR) - WORKS ON BOTH XAMPP AND CLOUD RUN
     // ============================================
     const fileInput = document.getElementById('qr-file-input');
     const dropZone = document.getElementById('drop-zone');
