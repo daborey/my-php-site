@@ -34,14 +34,18 @@ function log_sqlite_event($db, $username, $event_type) {
     }
 }
 
-// Simple Base32 Generator for TOTP 2FA Secrets
-function generate_base32_secret($length = 16) {
-    $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-    $secret = '';
-    for ($i = 0; $i < $length; $i++) {
-        $secret .= $chars[random_int(0, 31)];
-    }
-    return $secret;
+// Ensure dedicated table for saved TOTP Accounts exists
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS authenticator_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        account_label TEXT NOT NULL,
+        secret_key TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )");
+} catch (PDOException $e) {
+    // Table handles auto-creation
 }
 
 // 1. Authentication Guard
@@ -65,46 +69,46 @@ $user_id = $_SESSION['user_id'];
 $status_msg = "";
 $status_type = "error";
 
-// 3. Fetch User 2FA Status
-$stmt = $db->prepare("SELECT username, twofa_secret FROM users WHERE id = ?");
-$stmt->execute([$user_id]);
-$user = $stmt->fetch();
-
-$username = $user['username'] ?? 'User';
-$twofa_secret = $user['twofa_secret'] ?? '';
-
-// Handle Generating New Secret Request
+// 3. Handle Saving Decoded 2FA Secret
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action'])) {
     if (!verify_csrf_token($_POST['csrf_token'] ?? '')) {
-        log_sqlite_event($db, $username, 'CSRF_VALIDATION_FAILURE');
+        log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'CSRF_VALIDATION_FAILURE');
         die("Security token validation failed.");
     }
 
-    if ($_POST['action'] === 'enable_2fa') {
-        $new_secret = generate_base32_secret();
-        $update_stmt = $db->prepare("UPDATE users SET twofa_secret = ? WHERE id = ?");
-        if ($update_stmt->execute([$new_secret, $user_id])) {
-            $twofa_secret = $new_secret;
-            log_sqlite_event($db, $username, '2FA_SECRET_GENERATED');
-            $status_msg = "New 2FA Secret Provisioned Successfully!";
-            $status_type = "success";
+    if ($_POST['action'] === 'add_account') {
+        $label = trim($_POST['account_label'] ?? 'Uploaded Account');
+        $secret = strtoupper(preg_replace('/[^A-Za-z2-7]/', '', $_POST['secret_key'] ?? ''));
+
+        if (!empty($secret)) {
+            $stmt = $db->prepare("INSERT INTO authenticator_accounts (user_id, account_label, secret_key) VALUES (?, ?, ?)");
+            if ($stmt->execute([$user_id, $label, $secret])) {
+                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', '2FA_ACCOUNT_ADDED');
+                header("Location: /daboreystep2/dashboard.php");
+                exit;
+            } else {
+                $status_msg = "Failed to save 2FA account.";
+            }
+        } else {
+            $status_msg = "Invalid 2FA Secret extracted from image.";
         }
-    } elseif ($_POST['action'] === 'disable_2fa') {
-        $update_stmt = $db->prepare("UPDATE users SET twofa_secret = NULL WHERE id = ?");
-        if ($update_stmt->execute([$user_id])) {
-            $twofa_secret = '';
-            log_sqlite_event($db, $username, '2FA_SECRET_REMOVED');
-            $status_msg = "2FA Token Removed.";
-            $status_type = "success";
-        }
+    } elseif ($_POST['action'] === 'delete_account') {
+        $account_id = intval($_POST['account_id'] ?? 0);
+        $stmt = $db->prepare("DELETE FROM authenticator_accounts WHERE id = ? AND user_id = ?");
+        $stmt->execute([$account_id, $user_id]);
+        header("Location: /daboreystep2/dashboard.php");
+        exit;
     }
 }
 
-// Prepare Google Authenticator QR Code URI
-$qr_code_url = "";
-if (!empty($twofa_secret)) {
-    $otpauth_url = "otpauth://totp/DaboreyStep2:" . urlencode($username) . "?secret=" . $twofa_secret . "&issuer=" . urlencode("DaboreyStep2");
-    $qr_code_url = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" . urlencode($otpauth_url);
+// 4. Fetch User's 2FA Accounts
+$accounts = [];
+try {
+    $stmt = $db->prepare("SELECT id, account_label, secret_key, created_at FROM authenticator_accounts WHERE user_id = ? ORDER BY id DESC");
+    $stmt->execute([$user_id]);
+    $accounts = $stmt->fetchAll();
+} catch (PDOException $e) {
+    $accounts = [];
 }
 ?>
 <!DOCTYPE html>
@@ -112,7 +116,11 @@ if (!empty($twofa_secret)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2FA Authenticator - Daborey Step 2</title>
+    <title>2FA Authenticator Vault - Daborey Step 2</title>
+    <!-- jsQR Library for scanning QR image directly in the browser -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <!-- OTPAuth Library for client-side live 6-digit TOTP code calculation -->
+    <script src="https://cdn.jsdelivr.net/npm/otpauth@9.1.4/dist/otpauth.umd.min.js"></script>
     <style>
         body { 
             font-family: 'Segoe UI', Arial, sans-serif; 
@@ -135,27 +143,9 @@ if (!empty($twofa_secret)) {
         }
         .header-title-zone h1 { font-size: 24px; color: #38bdf8; margin: 0 0 5px 0; }
         .user-info { font-size: 14px; color: #94a3b8; }
-        .btn-profile {
-            padding: 8px 16px; 
-            background: #334155; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 4px; 
-            font-weight: bold; 
-            font-size: 14px; 
-            margin-left: 15px; 
-        }
+        .btn-profile { padding: 8px 16px; background: #334155; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 15px; }
         .btn-profile:hover { background: #475569; }
-        .btn-logout { 
-            padding: 8px 16px; 
-            background: #ef4444; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 4px; 
-            font-weight: bold; 
-            font-size: 14px; 
-            margin-left: 10px; 
-        }
+        .btn-logout { padding: 8px 16px; background: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 10px; }
         .btn-logout:hover { background: #dc2626; }
 
         .clock-container {
@@ -168,77 +158,82 @@ if (!empty($twofa_secret)) {
             gap: 6px;
             text-align: center;
         }
-        .clock-cell {
-            background-color: #161922;
-            padding: 6px 4px;
-            border-radius: 4px;
-            border: 1px solid #2d2618;
-        }
+        .clock-cell { background-color: #161922; padding: 6px 4px; border-radius: 4px; border: 1px solid #2d2618; }
         .cell-label { font-size: 10px; color: #d1b477; display: block; }
         .cell-value { font-size: 20px; font-weight: bold; color: #ffb700; }
         .date-cell { grid-column: span 4; font-size: 12px; color: #bdc5e1; display: flex; justify-content: space-around; }
         .day-highlight { color: #ffb700; font-weight: bold; }
 
-        .auth-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            max-width: 600px;
-            margin: 0 auto;
+        .upload-card {
             background: #1e293b;
-            padding: 30px;
+            padding: 25px;
             border-radius: 8px;
             border: 1px solid #334155;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 600px;
+            margin: 0 auto 30px auto;
             text-align: center;
         }
-        .qr-box {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            display: inline-block;
-            margin: 20px 0;
-        }
-        .qr-box img { display: block; width: 200px; height: 200px; }
-        .secret-key {
-            background: #0f172a;
-            border: 1px dashed #38bdf8;
-            color: #38bdf8;
-            padding: 10px;
-            font-size: 18px;
-            font-family: monospace;
-            border-radius: 4px;
-            letter-spacing: 2px;
-            margin: 15px 0;
-            word-break: break-all;
-        }
-        .btn-action {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 14px;
+        .upload-zone {
+            border: 2px dashed #38bdf8;
+            padding: 20px;
+            border-radius: 6px;
             cursor: pointer;
-            text-decoration: none;
+            margin-top: 15px;
+            background: #0f172a;
         }
-        .btn-green { background: #16a34a; color: white; }
-        .btn-green:hover { background: #15803d; }
-        .btn-danger { background: #dc2626; color: white; }
-        .btn-danger:hover { background: #b91c1c; }
+        .upload-zone:hover { background: #1b283f; }
+        .file-input { display: none; }
 
-        .status-msg { margin-bottom: 15px; font-weight: bold; }
-        .status-error { color: #ef4444; }
-        .status-success { color: #4ade80; }
+        .accounts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .account-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+        }
+        .account-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin-bottom: 10px; }
+        .totp-code {
+            font-size: 32px;
+            font-weight: bold;
+            font-family: monospace;
+            color: #4ade80;
+            letter-spacing: 4px;
+            margin: 10px 0;
+        }
+        .timer-bar {
+            height: 4px;
+            background: #0284c7;
+            width: 100%;
+            border-radius: 2px;
+            transition: width 1s linear;
+        }
+        .btn-delete {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            float: right;
+        }
+        .status-error { text-align: center; color: #ef4444; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
     <header>
         <div class="header-title-zone">
-            <h1>Daborey Step 2 (2FA Manager)</h1>
+            <h1>Daborey Step 2 (Authenticator)</h1>
             <div class="user-info">
-                Authenticated Entity: <strong><?php echo sanitize($username); ?></strong>
+                Authenticated Entity: <strong><?php echo sanitize($_SESSION['username'] ?? 'User'); ?></strong>
                 <a href="/daboreystep2/profile.php" class="btn-profile">Profile</a>
                 <a href="/daboreystep2/logout.php" class="btn-logout">Sign Out</a>
             </div>
@@ -257,40 +252,139 @@ if (!empty($twofa_secret)) {
     </header>
 
     <?php if (!empty($status_msg)): ?>
-        <div class="status-msg status-<?php echo $status_type; ?>"><?php echo sanitize($status_msg); ?></div>
+        <div class="status-error"><?php echo sanitize($status_msg); ?></div>
     <?php endif; ?>
 
-    <div class="auth-container">
-        <h2>Two-Factor Authentication (2FA)</h2>
-        <p style="color:#94a3b8; font-size: 14px;">Scan the QR code image using Google Authenticator, Authy, or 1Password to bind your timed security token.</p>
+    <!-- QR Code Image Upload Form -->
+    <div class="upload-card">
+        <h2>Upload Backup 2FA QR Code</h2>
+        <p style="color:#94a3b8; font-size:14px;">Upload your saved 2FA QR code image to parse and add its 6-digit TOTP key.</p>
+        
+        <div class="upload-zone" onclick="document.getElementById('qr-file').click();">
+            <span id="upload-label">Click or Drag & Drop QR Image Here</span>
+            <input type="file" id="qr-file" class="file-input" accept="image/*" onchange="processQRImage(this)">
+        </div>
 
-        <?php if (!empty($twofa_secret)): ?>
-            <div class="qr-box">
-                <img src="<?php echo sanitize($qr_code_url); ?>" alt="2FA QR Code">
-            </div>
+        <form id="save-account-form" method="POST" action="/daboreystep2/dashboard.php" style="display:none; margin-top:20px;">
+            <input type="hidden" name="action" value="add_account">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+            <input type="hidden" name="secret_key" id="extracted-secret">
+            <input type="text" name="account_label" id="extracted-label" placeholder="Account Name (e.g. Google, GitHub)" required style="width:80%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:4px; margin-bottom:10px;">
+            <br>
+            <button type="submit" style="padding:8px 20px; background:#0284c7; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Save 2FA Account</button>
+        </form>
+    </div>
 
-            <div>Secret Key (Manual Entry):</div>
-            <div class="secret-key"><?php echo sanitize($twofa_secret); ?></div>
-
-            <form method="POST" action="/daboreystep2/dashboard.php">
-                <input type="hidden" name="action" value="disable_2fa">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                <button type="submit" class="btn-action btn-danger">Disable / Reset 2FA Token</button>
-            </form>
+    <!-- Live 2FA Tokens Grid -->
+    <div class="accounts-grid">
+        <?php if (!empty($accounts)): ?>
+            <?php foreach ($accounts as $acc): ?>
+                <div class="account-card" data-secret="<?php echo sanitize($acc['secret_key']); ?>">
+                    <form method="POST" action="/daboreystep2/dashboard.php" style="display:inline;">
+                        <input type="hidden" name="action" value="delete_account">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="account_id" value="<?php echo $acc['id']; ?>">
+                        <button type="submit" class="btn-delete" onclick="return confirm('Remove this token?')">Delete</button>
+                    </form>
+                    <div class="account-title"><?php echo sanitize($acc['account_label']); ?></div>
+                    <div class="totp-code" id="code-<?php echo $acc['id']; ?>">------</div>
+                    <div class="timer-bar" id="bar-<?php echo $acc['id']; ?>"></div>
+                </div>
+            <?php endforeach; ?>
         <?php else: ?>
-            <div style="margin: 30px 0; color: #e2e8f0;">
-                <em>No 2FA secret is currently provisioned for this account.</em>
+            <div style="grid-column: 1 / -1; text-align:center; color:#64748b; margin-top:30px;">
+                No 2FA tokens added yet. Upload a QR code image above to start generating 6-digit codes.
             </div>
-
-            <form method="POST" action="/daboreystep2/dashboard.php">
-                <input type="hidden" name="action" value="enable_2fa">
-                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                <button type="submit" class="btn-action btn-green">Generate 2FA QR Code & Token</button>
-            </form>
         <?php endif; ?>
     </div>
 
     <script>
+        // 1. Process and Parse Uploaded QR Code Image
+        function processQRImage(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            document.getElementById('upload-label').innerText = "Processing " + file.name + "...";
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const img = new Image();
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code && code.data) {
+                        parseOTPAuthURI(code.data);
+                    } else {
+                        alert("Could not detect a valid QR code in the uploaded image.");
+                        document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Parse otpauth:// URI extracted from QR Code
+        function parseOTPAuthURI(uri) {
+            if (!uri.startsWith("otpauth://")) {
+                alert("QR Code does not contain a standard 2FA OTP Auth URI.");
+                return;
+            }
+
+            try {
+                const url = new URL(uri);
+                const secret = url.searchParams.get("secret");
+                let label = decodeURIComponent(url.pathname.replace(/^\/\w+\//, ''));
+
+                if (!secret) {
+                    alert("No secret key found in QR Code.");
+                    return;
+                }
+
+                document.getElementById('extracted-secret').value = secret;
+                document.getElementById('extracted-label').value = label || "2FA Account";
+                document.getElementById('upload-label').innerText = "✅ QR Code Decoded: " + (label || "Secret Extracted");
+                document.getElementById('save-account-form').style.display = "block";
+            } catch (e) {
+                alert("Failed to parse 2FA QR code URI.");
+            }
+        }
+
+        // 2. Real-time TOTP Code & Progress Bar Generator
+        function updateTOTPCodes() {
+            const cards = document.querySelectorAll('.account-card');
+            const seconds = new Date().getSeconds();
+            const remaining = 30 - (seconds % 30);
+            const progressPercent = (remaining / 30) * 100;
+
+            cards.forEach(card => {
+                const secret = card.getAttribute('data-secret');
+                const codeElement = card.querySelector('.totp-code');
+                const barElement = card.querySelector('.timer-bar');
+
+                if (secret && window.OTPAuth) {
+                    try {
+                        const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) });
+                        codeElement.innerText = totp.generate();
+                    } catch (e) {
+                        codeElement.innerText = "ERROR";
+                    }
+                }
+                if (barElement) {
+                    barElement.style.width = progressPercent + "%";
+                }
+            });
+        }
+        setInterval(updateTOTPCodes, 1000);
+        updateTOTPCodes();
+
+        // 3. Header Clock Script
         function updateKhmerClock() {
             const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
             const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
