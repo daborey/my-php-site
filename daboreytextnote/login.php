@@ -1,85 +1,93 @@
 <?php
-// ============================================
-// FILE: login.php
-// ============================================
-require_once 'config.php';
-require_once 'functions.php';
-require_once 'security.php';
-
-// If logged in, go to dashboard
-if (is_logged_in()) {
-    redirect('dashboard.php');
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
-$error = '';
-$remember = false;
+// Check if user is already logged in -> Redirect to index.php using relative path
+if (isset($_SESSION['user_id'])) {
+    header("Location: index.php");
+    exit;
+}
+
+// Database Connection (SQLite PDO)
+try {
+    $db = new PDO('sqlite:' . __DIR__ . '/database.sqlite');
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    die("Database connection error: " . $e->getMessage());
+}
+
+$error_msg = "";
+if (isset($_GET['expired'])) {
+    $error_msg = "Your session expired. Please log in again.";
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF check
-    if (!validate_csrf($_POST['csrf_token'] ?? '')) {
-        $error = 'Invalid security token.';
-    } else {
-        $username = sanitize($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $remember = isset($_POST['remember']);
-        
-        if (empty($username) || empty($password)) {
-            $error = 'All fields are required.';
-        } elseif (!check_rate_limit('login_' . $_SERVER['REMOTE_ADDR'])) {
-            $error = 'Too many login attempts. Please try again later.';
-        } else {
-            if (login($username, $password)) {
-                // Remember me (7 days)
-                if ($remember) {
-                    $token = bin2hex(random_bytes(32));
-                    setcookie('remember_token', $token, time() + 604800, '/');
-                    
-                    global $db;
-                    $stmt = $db->prepare("UPDATE users SET remember_token = ? WHERE username = ?");
-                    $stmt->execute([password_hash($token, PASSWORD_DEFAULT), $username]);
-                }
-                redirect('dashboard.php');
+    $username = trim($_POST['username'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+
+    if (!empty($username) && !empty($password)) {
+        try {
+            $stmt = $db->prepare("SELECT id, username, password FROM users WHERE username = ?");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($password, $user['password'])) {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['last_activity'] = time();
+
+                // Redirect using clean relative path for Cloud Run
+                header("Location: index.php");
+                exit;
             } else {
-                $error = 'Invalid username or password.';
+                $error_msg = "Invalid username or password.";
             }
+        } catch (PDOException $e) {
+            $error_msg = "Database error: " . $e->getMessage();
         }
+    } else {
+        $error_msg = "Please fill in all fields.";
     }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login - <?php echo $site_name; ?></title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Notes Portal</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: #1e293b; padding: 30px; border-radius: 8px; border: 1px solid #334155; width: 100%; max-width: 380px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        h2 { margin-top: 0; color: #38bdf8; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; color: #94a3b8; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #fff; box-sizing: border-box; outline: none; }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: #38bdf8; }
+        button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; border-radius: 4px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #0369a1; }
+        .error { color: #ef4444; font-size: 14px; text-align: center; margin-bottom: 15px; }
+    </style>
 </head>
 <body>
-    <h1>Login</h1>
-    
-    <?php if ($error): ?>
-        <p style="color: red;"><?php echo $error; ?></p>
-    <?php endif; ?>
-    
-    <form method="POST">
-        <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
-        
-        <div>
-            <label>Username:</label>
-            <input type="text" name="username" required>
-        </div>
-        
-        <div>
-            <label>Password:</label>
-            <input type="password" name="password" required>
-        </div>
-        
-        <div>
-            <label>
-                <input type="checkbox" name="remember"> Remember me
-            </label>
-        </div>
-        
-        <button type="submit">Login</button>
-    </form>
-    
-    <p><a href="index.php">Home</a> | <a href="register.php">Register</a> | <a href="reset_password.php">Forgot Password?</a></p>
+    <div class="login-card">
+        <h2>Sign In</h2>
+        <?php if (!empty($error_msg)): ?>
+            <div class="error"><?php echo htmlspecialchars($error_msg); ?></div>
+        <?php endif; ?>
+        <form method="POST" action="login.php">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" required autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
+            <button type="submit">Log In</button>
+        </form>
+    </div>
 </body>
 </html>
