@@ -188,6 +188,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             margin-bottom: 15px;
             text-align: center;
         }
+        .auth-footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .auth-footer a {
+            color: #38bdf8;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .auth-footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -215,6 +229,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         </div>
         <button type="submit" class="btn-submit">Sign In</button>
     </form>
+
+    <div class="auth-footer">
+        Don't have an account? <a href="/daboreytextnote/register.php">Create one</a>
+    </div>
 </div>
 
 </body>
