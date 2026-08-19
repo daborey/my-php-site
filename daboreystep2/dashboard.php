@@ -319,7 +319,7 @@ try {
                     const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                     if (code && code.data) {
-                        parseOTPAuthURI(code.data);
+                        parseQRContent(code.data.trim());
                     } else {
                         alert("Could not detect a valid QR code in the uploaded image.");
                         document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
@@ -330,33 +330,57 @@ try {
             reader.readAsDataURL(file);
         }
 
-        // Parse otpauth:// URI extracted from QR Code
-        function parseOTPAuthURI(uri) {
-            if (!uri.startsWith("otpauth://")) {
-                alert("QR Code does not contain a standard 2FA OTP Auth URI.");
-                return;
+        // 2. Flexible QR Data Parser (Handles URI, Raw Base32 Secrets, and Query Strings)
+        function parseQRContent(qrData) {
+            let secret = "";
+            let label = "Uploaded 2FA Account";
+
+            // Case A: Standard otpauth:// URI
+            if (qrData.startsWith("otpauth://")) {
+                try {
+                    const url = new URL(qrData);
+                    secret = url.searchParams.get("secret");
+                    
+                    // Extract label from URI path
+                    const pathParts = url.pathname.split('/');
+                    if (pathParts.length > 1) {
+                        label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                    }
+                    if (url.searchParams.get("issuer")) {
+                        label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
+                    }
+                } catch (e) {
+                    console.error("URI Parse Error:", e);
+                }
+            } 
+            // Case B: Raw Base32 Secret Key String
+            else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
+                secret = qrData.replace(/\s+/g, '');
+                label = "Backup Key Token";
+            }
+            // Case C: Plain key-value parameter containing secret=
+            else if (qrData.includes("secret=")) {
+                const match = qrData.match(/secret=([A-Za-z2-7]+)/i);
+                if (match && match[1]) {
+                    secret = match[1];
+                }
             }
 
-            try {
-                const url = new URL(uri);
-                const secret = url.searchParams.get("secret");
-                let label = decodeURIComponent(url.pathname.replace(/^\/\w+\//, ''));
+            // Clean & Validate Secret
+            secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
 
-                if (!secret) {
-                    alert("No secret key found in QR Code.");
-                    return;
-                }
-
+            if (secret.length >= 8) {
                 document.getElementById('extracted-secret').value = secret;
-                document.getElementById('extracted-label').value = label || "2FA Account";
-                document.getElementById('upload-label').innerText = "✅ QR Code Decoded: " + (label || "Secret Extracted");
+                document.getElementById('extracted-label').value = label;
+                document.getElementById('upload-label').innerText = "✅ Valid Key Detected!";
                 document.getElementById('save-account-form').style.display = "block";
-            } catch (e) {
-                alert("Failed to parse 2FA QR code URI.");
+            } else {
+                alert("The QR code was read, but no valid Base32 TOTP secret key could be extracted.\n\nScanned content: " + qrData);
+                document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
             }
         }
 
-        // 2. Real-time TOTP Code & Progress Bar Generator
+        // 3. Real-time TOTP Code & Progress Bar Generator
         function updateTOTPCodes() {
             const cards = document.querySelectorAll('.account-card');
             const seconds = new Date().getSeconds();
@@ -384,7 +408,7 @@ try {
         setInterval(updateTOTPCodes, 1000);
         updateTOTPCodes();
 
-        // 3. Header Clock Script
+        // 4. Header Clock Script
         function updateKhmerClock() {
             const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
             const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
