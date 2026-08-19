@@ -43,10 +43,10 @@ try {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 } catch (PDOException $e) {
-    // Database tables initialized
+    // Database initialized
 }
 
-// Native SQLite Logging Helper (Cloud Run Forwarded Client IP)
+// Logging Helper
 function log_sqlite_event($db, $username, $event_type) {
     try {
         $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
@@ -60,19 +60,19 @@ function log_sqlite_event($db, $username, $event_type) {
     }
 }
 
-// 4. Enforce Authentication Guard (Relative Path for Cloud Run)
+// 4. Enforce Authentication Guard
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
+    header("Location: /daboreytextnote/login.php");
     exit;
 }
 
-// 5. 15-Minute Session Timeout Check
+// 5. Session Timeout Check (15 Minutes)
 $max_idle_seconds = 900;
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $max_idle_seconds)) {
     log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'SESSION_TIMEOUT_EXPIRED');
     session_unset();
     session_destroy();
-    header("Location: login.php?expired=1");
+    header("Location: /daboreytextnote/login.php?expired=1");
     exit;
 }
 $_SESSION['last_activity'] = time();
@@ -80,7 +80,6 @@ $_SESSION['last_activity'] = time();
 $user_id = $_SESSION['user_id'];
 $status_msg = "";
 
-// Generate CSRF Token if missing
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -100,7 +99,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $stmt = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
             if ($stmt->execute([$user_id, $title, $content])) {
                 log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_CREATED_SUCCESSFULLY');
-                header("Location: index.php");
+                header("Location: /daboreytextnote/index.php");
                 exit;
             } else {
                 $status_msg = "Error saving note.";
@@ -111,7 +110,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// 7. Fetch Notes for Authenticated User
+// 7. Fetch User Notes
 $notes = [];
 try {
     $stmt = $db->prepare("SELECT title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC");
@@ -241,30 +240,30 @@ try {
             <h1>Secure Notes Portal</h1>
             <div class="user-info">
                 Authenticated Entity: <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong>
-                <a href="logout.php" class="btn-logout">Sign Out</a>
+                <a href="/daboreytextnote/logout.php" class="btn-logout">Sign Out</a>
             </div>
         </div>
 
         <div class="clock-container">
             <div class="clock-cell">
                 <span class="cell-label">ម៉ោង</span>
-                <div id="hours" class="cell-value">០០</div>
+                <div id="hours" class="cell-value">00</div>
             </div>
             <div class="clock-cell">
                 <span class="cell-label">នាទី</span>
-                <div id="minutes" class="cell-value">០០</div>
+                <div id="minutes" class="cell-value">00</div>
             </div>
             <div class="clock-cell">
                 <span class="cell-label">វិនាទី</span>
-                <div id="seconds" class="cell-value">០០</div>
+                <div id="seconds" class="cell-value">00</div>
             </div>
             <div class="clock-cell">
-                <span class="cell-label">វេលា</span>
-                <div id="ampm" class="cell-value">--</div>
+                <span class="cell-label">ពេល</span>
+                <div id="ampm" class="cell-value">AM</div>
             </div>
-            <div class="clock-cell date-cell">
-                <span id="day-display" class="day-highlight">ថ្ងៃ...</span>
-                <span id="date-display">ថ្ងៃ-ខែ-ឆ្នាំ</span>
+            <div class="date-cell">
+                <span id="khmer-day" class="day-highlight">---</span>
+                <span id="khmer-date">00 --- 0000</span>
             </div>
         </div>
     </header>
@@ -274,84 +273,70 @@ try {
     <?php endif; ?>
 
     <div class="note-creator-container">
-        <form class="note-creator" method="POST" action="index.php">
-            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
-            <input type="text" name="title" placeholder="Title" autocomplete="off">
-            <textarea name="content" placeholder="Take a note..."></textarea>
+        <form class="note-creator" method="POST" action="/daboreytextnote/index.php">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+            <input type="text" name="title" placeholder="ចំណងជើង (Title)..." autocomplete="off" required>
+            <textarea name="content" placeholder="សរសេរកំណត់ចំណាំទីនេះ (Take a note...)" required></textarea>
             <div class="actions">
-                <button type="submit">Save</button>
+                <button type="submit">រក្សាទុក</button>
             </div>
         </form>
     </div>
 
     <div class="notes-grid">
-        <?php if (empty($notes)): ?>
-            <div class="no-notes">Notes you add appear here.</div>
-        <?php else: ?>
+        <?php if (!empty($notes)): ?>
             <?php foreach ($notes as $note): ?>
                 <div class="note-card">
                     <div>
-                        <?php if (!empty($note['title'])): ?>
-                            <h3 class="note-title"><?php echo htmlspecialchars($note['title']); ?></h3>
-                        <?php endif; ?>
-                        <p class="note-content"><?php echo htmlspecialchars($note['content']); ?></p>
+                        <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
+                        <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
-                    <div class="note-date"><?php echo date('M d, Y', strtotime($note['created_at'])); ?></div>
+                    <div class="note-date">
+                        <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
+                    </div>
                 </div>
             <?php endforeach; ?>
+        <?php else: ?>
+            <div class="no-notes">មិនទាន់មានកំណត់ចំណាំនៅឡើយទេ។ (No notes found.)</div>
         <?php endif; ?>
     </div>
 
     <script>
-        function toKhmerNumber(numString) {
+        function updateKhmerClock() {
             const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-            return numString.toString().replace(/[0-9]/g, (w) => khmerNumerals[+w]);
-        }
+            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
 
-        const khmerDays = [
-            "ថ្ងៃអាទិត្យ", "ថ្ងៃចន្ទ", "ថ្ងៃអង្គារ", "ថ្ងៃពុធ", "ថ្ងៃព្រហស្បតិ៍", "ថ្ងៃសុក្រ", "ថ្ងៃសៅរ៍"
-        ];
-
-        function updateClock() {
-            const d = new Date();
-            
-            let hours24 = d.getHours();
-            let minutes = d.getMinutes().toString().padStart(2, '0');
-            let seconds = d.getSeconds().toString().padStart(2, '0');
-            let dayIndex = d.getDay();
-            
-            let year = d.getFullYear();
-            let month = (d.getMonth() + 1).toString().padStart(2, '0');
-            let dayOfMonth = d.getDate().toString().padStart(2, '0');
-            
-            let dateString = `${dayOfMonth}-${month}-${year}`;
-
-            let periodText = "";
-            if (hours24 >= 0 && hours24 < 12) {
-                periodText = "ព្រឹក";  
-            } else if (hours24 >= 12 && hours24 < 16) {
-                periodText = "ថ្ងៃ";    
-            } else if (hours24 >= 16 && hours24 < 19) {
-                periodText = "ល្ងាច"; 
-            } else {
-                periodText = "យប់";    
+            function toKhmerNum(num) {
+                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
             }
 
-            let hours12 = hours24 % 12;
-            hours12 = hours12 ? hours12 : 12; 
-            hours12 = hours12.toString().padStart(2, '0');
+            const now = new Date();
 
-            document.getElementById("hours").innerHTML = toKhmerNumber(hours12);
-            document.getElementById("minutes").innerHTML = toKhmerNumber(minutes);
-            document.getElementById("seconds").innerHTML = toKhmerNumber(seconds);
-            document.getElementById("ampm").innerHTML = periodText;
-            
-            document.getElementById("day-display").innerHTML = khmerDays[dayIndex];
-            document.getElementById("date-display").innerHTML = toKhmerNumber(dateString);
+            let rawHours = now.getHours();
+            const rawMinutes = now.getMinutes();
+            const rawSeconds = now.getSeconds();
+
+            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+            rawHours = rawHours % 12;
+            rawHours = rawHours ? rawHours : 12; 
+
+            document.getElementById('hours').innerText = toKhmerNum(rawHours);
+            document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
+            document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
+            document.getElementById('ampm').innerText = ampmKhmer;
+
+            const dayName = khmerDays[now.getDay()];
+            const dayNum = toKhmerNum(now.getDate());
+            const monthName = khmerMonths[now.getMonth()];
+            const yearNum = now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+
+            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + dayName;
+            document.getElementById('khmer-date').innerText = dayNum + ' ' + monthName + ' ' + yearNum;
         }
 
-        updateClock();
-        setInterval(updateClock, 1000);
+        updateKhmerClock();
+        setInterval(updateKhmerClock, 1000);
     </script>
 </body>
 </html>
