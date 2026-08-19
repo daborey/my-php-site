@@ -1,8 +1,6 @@
 <?php
 require 'db.php';
 
-$basePath = $GLOBALS['basePath'];
-
 if (isset($_SESSION['username'])) {
     log_system_event($conn, $_SESSION['username'], 'USER_LOGOUT_EXPLICIT');
 }
@@ -18,6 +16,6 @@ if (ini_get("session.use_cookies")) {
 }
 
 session_destroy();
-header("Location: " . $basePath . "/index.php");
+header("Location: index.php");
 exit;
 ?>

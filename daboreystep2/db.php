@@ -1,26 +1,8 @@
 <?php
-// ============================================
-// ENVIRONMENT DETECTION
-// ============================================
-if (isset($_SERVER['GOOGLE_CLOUD_RUN']) || is_dir('/mnt/storage')) {
-    // Google Cloud Run
-    define('ENVIRONMENT', 'cloud');
-    $dbPath = '/mnt/storage/daboreypass.db';
-    $basePath = '/daboreystep2';
-    ini_set('display_errors', 0);
-    error_reporting(E_ALL);
-} else {
-    // XAMPP Local
-    define('ENVIRONMENT', 'local');
-    $dbPath = __DIR__ . '/daboreypass.db';
-    $basePath = '/my-php-site/daboreystep2';
-    ini_set('display_errors', 1);
-    error_reporting(E_ALL);
-}
+// Cloud Run production settings
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
 
-// ============================================
-// SESSION CONFIGURATION
-// ============================================
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1); 
     ini_set('session.use_only_cookies', 1);
@@ -28,9 +10,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ============================================
-// DATABASE CONNECTION
-// ============================================
+// Cloud Run SQLite path with persistent storage
+$dbPath = '/mnt/storage/daboreypass.db';
+
 try {
     $conn = new SQLite3($dbPath);
     $conn->enableExceptions(true);
@@ -64,23 +46,13 @@ try {
     ");
     
 } catch (Exception $e) {
-    if (ENVIRONMENT === 'cloud') {
-        die("System connection exception. Check internal system logs.");
-    } else {
-        die("Error: " . $e->getMessage());
-    }
+    die("System connection exception. Check internal system logs.");
 }
 
-// ============================================
-// CSRF TOKEN
-// ============================================
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// ============================================
-// FUNCTIONS
-// ============================================
 function log_system_event($conn, $username, $action) {
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN_IP';
     $stmt = $conn->prepare("INSERT INTO audit_logs (username, action_performed, network_ip) VALUES (?, ?, ?)");
@@ -117,7 +89,4 @@ function fetch_all($result) {
     }
     return $rows;
 }
-
-// Export basePath for other files
-$GLOBALS['basePath'] = $basePath;
 ?>
