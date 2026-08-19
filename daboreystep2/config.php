@@ -11,7 +11,7 @@ error_reporting(E_ALL);
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
-    ini_set('session.cookie_samesite', 'Strict');
+    ini_set('session.cookie_samesite', 'Lax'); // Changed from Strict to Lax for redirect compatibility
     session_start();
 }
 
