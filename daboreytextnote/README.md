@@ -1,4 +1,0 @@
-# blueprintsqlite
-# blueprintsqlite
-# blueprintsqlite
-# daboreytextnotesqlite
