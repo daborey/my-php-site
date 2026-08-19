@@ -298,141 +298,205 @@ try {
         <?php endif; ?>
     </div>
 
-    <script>
-        // 1. Process and Parse Uploaded QR Code Image
-        function processQRImage(input) {
-            if (!input.files || !input.files[0]) return;
-            const file = input.files[0];
-            document.getElementById('upload-label').innerText = "Processing " + file.name + "...";
+   <!-- Include Protobuf Library -->
+<script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js"></script>
 
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const img = new Image();
-                img.onload = function () {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0, img.width, img.height);
-                    
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+<script>
+    // 1. Process and Parse Uploaded QR Code Image
+    function processQRImage(input) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        document.getElementById('upload-label').innerText = "Processing " + file.name + "...";
 
-                    if (code && code.data) {
-                        parseQRContent(code.data.trim());
-                    } else {
-                        alert("Could not detect a valid QR code in the uploaded image.");
-                        document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
-                    }
-                };
-                img.src = e.target.result;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const img = new Image();
+            img.onload = function () {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0, img.width, img.height);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                if (code && code.data) {
+                    parseQRContent(code.data.trim());
+                } else {
+                    alert("Could not detect a valid QR code in the uploaded image.");
+                    document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+                }
             };
-            reader.readAsDataURL(file);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // Helper: Convert Uint8Array to Base32 String
+    function bytesToBase32(bytes) {
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        let bits = 0;
+        let value = 0;
+        let output = "";
+        for (let i = 0; i < bytes.length; i++) {
+            value = (value << 8) | bytes[i];
+            bits += 8;
+            while (bits >= 5) {
+                output += alphabet[(value >>> (bits - 5)) & 31];
+                bits -= 5;
+            }
+        }
+        if (bits > 0) {
+            output += alphabet[(value << (5 - bits)) & 31];
+        }
+        return output;
+    }
+
+    // 2. Flexible QR Data Parser (Handles URI, Migration Exports, Raw Base32 Secrets)
+    function parseQRContent(qrData) {
+        let secret = "";
+        let label = "Uploaded 2FA Account";
+
+        // Case A: Google Authenticator Migration Link (otpauth-migration://)
+        if (qrData.startsWith("otpauth-migration://")) {
+            try {
+                const url = new URL(qrData);
+                const dataParam = url.searchParams.get("data");
+                if (dataParam) {
+                    const binaryStr = atob(dataParam);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let i = 0; i < binaryStr.length; i++) {
+                        bytes[i] = binaryStr.charCodeAt(i);
+                    }
+
+                    // ProtoBuf schema structure for Google Authenticator Export
+                    const root = protobuf.Root.fromJSON({
+                        nested: {
+                            MigrationPayload: {
+                                fields: {
+                                    otpParameters: { rule: "repeated", type: "OtpParameters", id: 1 }
+                                }
+                            },
+                            OtpParameters: {
+                                fields: {
+                                    secret: { type: "bytes", id: 1 },
+                                    name: { type: "string", id: 2 },
+                                    issuer: { type: "string", id: 3 }
+                                }
+                            }
+                        }
+                    });
+
+                    const MigrationPayload = root.lookupType("MigrationPayload");
+                    const message = MigrationPayload.decode(bytes);
+
+                    if (message.otpParameters && message.otpParameters.length > 0) {
+                        const param = message.otpParameters[0]; // Extract first account
+                        secret = bytesToBase32(param.secret);
+                        label = (param.issuer ? param.issuer + " (" + param.name + ")" : param.name) || "Google Exported Token";
+                    }
+                }
+            } catch (e) {
+                console.error("Migration Parse Error:", e);
+            }
+        }
+        // Case B: Standard otpauth:// URI
+        else if (qrData.startsWith("otpauth://")) {
+            try {
+                const url = new URL(qrData);
+                secret = url.searchParams.get("secret");
+                const pathParts = url.pathname.split('/');
+                if (pathParts.length > 1) {
+                    label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                }
+                if (url.searchParams.get("issuer")) {
+                    label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
+                }
+            } catch (e) {
+                console.error("URI Parse Error:", e);
+            }
+        } 
+        // Case C: Raw Base32 Secret Key String
+        else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
+            secret = qrData.replace(/\s+/g, '');
+            label = "Backup Key Token";
+        }
+        // Case D: Plain key-value parameter containing secret=
+        else if (qrData.includes("secret=")) {
+            const match = qrData.match(/secret=([A-Za-z2-7]+)/i);
+            if (match && match[1]) {
+                secret = match[1];
+            }
         }
 
-        // 2. Flexible QR Data Parser (Handles URI, Raw Base32 Secrets, and Query Strings)
-        function parseQRContent(qrData) {
-            let secret = "";
-            let label = "Uploaded 2FA Account";
+        // Clean & Validate Secret
+        secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
 
-            // Case A: Standard otpauth:// URI
-            if (qrData.startsWith("otpauth://")) {
+        if (secret.length >= 8) {
+            document.getElementById('extracted-secret').value = secret;
+            document.getElementById('extracted-label').value = label;
+            document.getElementById('upload-label').innerText = "✅ Decoded: " + label;
+            document.getElementById('save-account-form').style.display = "block";
+        } else {
+            alert("The QR code was read, but no valid Base32 TOTP secret key could be extracted.\n\nScanned content: " + qrData);
+            document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+        }
+    }
+
+    // 3. Real-time TOTP Code & Progress Bar Generator
+    function updateTOTPCodes() {
+        const cards = document.querySelectorAll('.account-card');
+        const seconds = new Date().getSeconds();
+        const remaining = 30 - (seconds % 30);
+        const progressPercent = (remaining / 30) * 100;
+
+        cards.forEach(card => {
+            const secret = card.getAttribute('data-secret');
+            const codeElement = card.querySelector('.totp-code');
+            const barElement = card.querySelector('.timer-bar');
+
+            if (secret && window.OTPAuth) {
                 try {
-                    const url = new URL(qrData);
-                    secret = url.searchParams.get("secret");
-                    
-                    // Extract label from URI path
-                    const pathParts = url.pathname.split('/');
-                    if (pathParts.length > 1) {
-                        label = decodeURIComponent(pathParts[pathParts.length - 1]);
-                    }
-                    if (url.searchParams.get("issuer")) {
-                        label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
-                    }
+                    const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) });
+                    codeElement.innerText = totp.generate();
                 } catch (e) {
-                    console.error("URI Parse Error:", e);
-                }
-            } 
-            // Case B: Raw Base32 Secret Key String
-            else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
-                secret = qrData.replace(/\s+/g, '');
-                label = "Backup Key Token";
-            }
-            // Case C: Plain key-value parameter containing secret=
-            else if (qrData.includes("secret=")) {
-                const match = qrData.match(/secret=([A-Za-z2-7]+)/i);
-                if (match && match[1]) {
-                    secret = match[1];
+                    codeElement.innerText = "ERROR";
                 }
             }
-
-            // Clean & Validate Secret
-            secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
-
-            if (secret.length >= 8) {
-                document.getElementById('extracted-secret').value = secret;
-                document.getElementById('extracted-label').value = label;
-                document.getElementById('upload-label').innerText = "✅ Valid Key Detected!";
-                document.getElementById('save-account-form').style.display = "block";
-            } else {
-                alert("The QR code was read, but no valid Base32 TOTP secret key could be extracted.\n\nScanned content: " + qrData);
-                document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+            if (barElement) {
+                barElement.style.width = progressPercent + "%";
             }
+        });
+    }
+    setInterval(updateTOTPCodes, 1000);
+    updateTOTPCodes();
+
+    // 4. Header Clock Script
+    function updateKhmerClock() {
+        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+
+        function toKhmerNum(num) {
+            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
         }
 
-        // 3. Real-time TOTP Code & Progress Bar Generator
-        function updateTOTPCodes() {
-            const cards = document.querySelectorAll('.account-card');
-            const seconds = new Date().getSeconds();
-            const remaining = 30 - (seconds % 30);
-            const progressPercent = (remaining / 30) * 100;
+        const now = new Date();
+        let rawHours = now.getHours();
+        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+        rawHours = rawHours % 12 || 12;
 
-            cards.forEach(card => {
-                const secret = card.getAttribute('data-secret');
-                const codeElement = card.querySelector('.totp-code');
-                const barElement = card.querySelector('.timer-bar');
+        document.getElementById('hours').innerText = toKhmerNum(rawHours);
+        document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
+        document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
+        document.getElementById('ampm').innerText = ampmKhmer;
 
-                if (secret && window.OTPAuth) {
-                    try {
-                        const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) });
-                        codeElement.innerText = totp.generate();
-                    } catch (e) {
-                        codeElement.innerText = "ERROR";
-                    }
-                }
-                if (barElement) {
-                    barElement.style.width = progressPercent + "%";
-                }
-            });
-        }
-        setInterval(updateTOTPCodes, 1000);
-        updateTOTPCodes();
-
-        // 4. Header Clock Script
-        function updateKhmerClock() {
-            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-
-            function toKhmerNum(num) {
-                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-            }
-
-            const now = new Date();
-            let rawHours = now.getHours();
-            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-            rawHours = rawHours % 12 || 12;
-
-            document.getElementById('hours').innerText = toKhmerNum(rawHours);
-            document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
-            document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
-            document.getElementById('ampm').innerText = ampmKhmer;
-
-            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
-            document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-        }
-        updateKhmerClock();
-        setInterval(updateKhmerClock, 1000);
-    </script>
+        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
+        document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+    }
+    updateKhmerClock();
+    setInterval(updateKhmerClock, 1000);
+</script>
 </body>
 </html>
