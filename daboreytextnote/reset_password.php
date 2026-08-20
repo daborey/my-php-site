@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// FILE: daboreytextnote/reset_password.php
+// FILE: reset_password.php
 // PROJECT: daboreytextnote
 // ============================================
 
@@ -32,9 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
                 $update_stmt->execute([$hashed_password, $user['id']]);
 
-                if (function_exists('log_sqlite_event')) {
-                    log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
-                }
+                log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
                 $success_msg = "Password updated successfully! You can now log in.";
             } else {
                 $error_msg = "Invalid username or old password.";
@@ -58,21 +56,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
         input { width: 100%; padding: 10px; margin: 8px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button:hover { background: #0369a1; }
         .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
         .success { color: #4ade80; font-size: 13px; text-align: center; margin-bottom: 10px; }
         a { color: #38bdf8; text-decoration: none; font-size: 13px; display: block; text-align: center; margin-top: 15px; }
-        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="card">
         <h2>Reset Password</h2>
         <?php if ($error_msg): ?>
-            <div class="error"><?php echo function_exists('sanitize') ? sanitize($error_msg) : htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div>
+            <div class="error"><?php echo sanitize($error_msg); ?></div>
         <?php endif; ?>
         <?php if ($success_msg): ?>
-            <div class="success"><?php echo function_exists('sanitize') ? sanitize($success_msg) : htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?></div>
+            <div class="success"><?php echo sanitize($success_msg); ?></div>
         <?php endif; ?>
         <form method="POST" action="reset_password.php">
             <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
