@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// FILE: daboreytextnote/login.php
+// FILE: login.php
 // PROJECT: daboreytextnote
 // ============================================
 

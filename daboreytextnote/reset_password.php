@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// FILE: daboreytextnote/reset_password.php
+// FILE: reset_password.php
 // PROJECT: daboreytextnote
 // ============================================
 
