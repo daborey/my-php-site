@@ -11,9 +11,7 @@ $error_msg = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf_token'] ?? '';
-    
-    // Verify CSRF Token safely
-    if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+    if (!verify_csrf_token($token)) {
         die("Security validation failed.");
     }
 
@@ -31,23 +29,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['username'] = $user['username'];
             $_SESSION['last_activity'] = time();
 
-            unset($_SESSION['csrf_token']);
+            log_sqlite_event($db, $username, 'LOGIN_SUCCESS');
 
             header("Location: dashboard.php");
             exit;
         } else {
+            log_sqlite_event($db, $username, 'LOGIN_FAILED');
             $error_msg = "Invalid username or password.";
         }
     } else {
         $error_msg = "Please fill in all fields.";
-    }
-}
-
-if (empty($_SESSION['csrf_token'])) {
-    if (function_exists('generate_csrf_token')) {
-        generate_csrf_token();
-    } else {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 }
 ?>
@@ -73,10 +64,10 @@ if (empty($_SESSION['csrf_token'])) {
     <div class="card">
         <h2>Sign In</h2>
         <?php if ($error_msg): ?>
-            <div class="error"><?php echo function_exists('sanitize') ? sanitize($error_msg) : htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div>
+            <div class="error"><?php echo sanitize($error_msg); ?></div>
         <?php endif; ?>
         <form method="POST" action="login.php">
-            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
             <input type="text" name="username" placeholder="Username" required autofocus autocomplete="off">
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Log In</button>
