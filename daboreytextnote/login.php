@@ -1,17 +1,17 @@
 <?php
 // ============================================
-// FILE: login.php
-// PROJECT: daboreytextnote
+// FILE: daboreytextnote/login.php
 // ============================================
 
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/functions.php';
 
 $error_msg = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf_token'] ?? '';
-    if (!verify_csrf_token($token)) {
+    
+    // Verify CSRF Token safely
+    if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         die("Security validation failed.");
     }
 
@@ -24,22 +24,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
+            // Regenerate session to prevent session fixation
             session_regenerate_id(true);
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['last_activity'] = time();
 
-            log_sqlite_event($db, $username, 'LOGIN_SUCCESS');
+            // Clear old CSRF token so dashboard generates a fresh one
+            unset($_SESSION['csrf_token']);
 
-            header("Location: dashboard.php");
+            header("Location: /daboreytextnote/dashboard.php");
             exit;
         } else {
-            log_sqlite_event($db, $username, 'LOGIN_FAILED');
             $error_msg = "Invalid username or password.";
         }
     } else {
         $error_msg = "Please fill in all fields.";
     }
+}
+
+// Generate new token for the form
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 ?>
 <!DOCTYPE html>
@@ -53,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
         input { width: 100%; padding: 10px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button:hover { background: #0369a1; }
         .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
         .links { margin-top: 15px; text-align: center; font-size: 13px; }
         .links a { color: #38bdf8; text-decoration: none; margin: 0 5px; }
@@ -64,17 +69,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
         <h2>Sign In</h2>
         <?php if ($error_msg): ?>
-            <div class="error"><?php echo sanitize($error_msg); ?></div>
+            <div class="error"><?php echo htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div>
         <?php endif; ?>
-        <form method="POST" action="login.php">
-            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+        <form method="POST" action="/daboreytextnote/login.php">
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
             <input type="text" name="username" placeholder="Username" required autofocus autocomplete="off">
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Log In</button>
         </form>
         <div class="links">
-            <a href="reset_password.php">Reset Password</a> | 
-            <a href="register.php">Register</a>
+            <a href="/daboreytextnote/reset_password.php">Reset Password</a> | 
+            <a href="/daboreytextnote/register.php">Register</a>
         </div>
     </div>
 </body>

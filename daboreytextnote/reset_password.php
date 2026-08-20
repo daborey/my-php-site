@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// FILE: reset_password.php
+// FILE: daboreytextnote/reset_password.php
 // PROJECT: daboreytextnote
 // ============================================
 
@@ -32,7 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
                 $update_stmt->execute([$hashed_password, $user['id']]);
 
-                log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
+                if (function_exists('log_sqlite_event')) {
+                    log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
+                }
                 $success_msg = "Password updated successfully! You can now log in.";
             } else {
                 $error_msg = "Invalid username or old password.";
@@ -67,10 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
         <h2>Reset Password</h2>
         <?php if ($error_msg): ?>
-            <div class="error"><?php echo sanitize($error_msg); ?></div>
+            <div class="error"><?php echo function_exists('sanitize') ? sanitize($error_msg) : htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div>
         <?php endif; ?>
         <?php if ($success_msg): ?>
-            <div class="success"><?php echo sanitize($success_msg); ?></div>
+            <div class="success"><?php echo function_exists('sanitize') ? sanitize($success_msg) : htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?></div>
         <?php endif; ?>
         <form method="POST" action="reset_password.php">
             <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
