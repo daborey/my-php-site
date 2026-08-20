@@ -1,145 +1,88 @@
 <?php
 // ============================================
-// FILE: reset_password.php
+// FILE: daboreytextnote/reset_password.php
+// PROJECT: daboreytextnote
 // ============================================
-require_once 'config.php';
-require_once 'functions.php';
-require_once 'security.php';
 
-// If logged in, go to dashboard
-if (is_logged_in()) {
-    redirect('dashboard.php');
-}
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/functions.php';
 
-$error = '';
-$success = '';
-$step = 'request'; // request or reset
-
-// Check if reset token is provided
-if (isset($_GET['token'])) {
-    $step = 'reset';
-    $token = $_GET['token'];
-}
+$error_msg = "";
+$success_msg = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!validate_csrf($_POST['csrf_token'] ?? '')) {
-        $error = 'Invalid security token.';
-    } elseif ($step === 'request') {
-        // Step 1: Request password reset
-        $username = sanitize($_POST['username'] ?? '');
-        
-        if (empty($username)) {
-            $error = 'Username is required.';
-        } elseif (!check_rate_limit('reset_' . $_SERVER['REMOTE_ADDR'])) {
-            $error = 'Too many reset attempts. Please try again later.';
-        } else {
-            // Generate token and store
-            $reset_token = generate_reset_token();
-            $hashed_token = password_hash($reset_token, PASSWORD_DEFAULT);
-            
-            global $db;
-            $stmt = $db->prepare("UPDATE users SET reset_token = ?, reset_expires = datetime('now', '+1 hour') WHERE username = ?");
-            $stmt->execute([$hashed_token, $username]);
-            
-            if ($stmt->rowCount() > 0) {
-                $success = "Password reset link has been generated. Use token: " . $reset_token;
-            } else {
-                $error = 'Username not found.';
-            }
-        }
-    } elseif ($step === 'reset') {
-        // Step 2: Reset password
-        $token = $_POST['token'] ?? '';
-        $password = $_POST['password'] ?? '';
-        $confirm = $_POST['confirm_password'] ?? '';
-        
-        if (empty($token) || empty($password) || empty($confirm)) {
-            $error = 'All fields are required.';
-        } elseif (!validate_password($password)) {
-            $error = 'Password must be at least 6 characters.';
-        } elseif ($password !== $confirm) {
-            $error = 'Passwords do not match.';
-        } else {
-            global $db;
-            
-            // Verify token
-            $stmt = $db->prepare("SELECT username FROM users WHERE reset_token IS NOT NULL AND reset_expires > datetime('now')");
-            $stmt->execute();
-            $users = $stmt->fetchAll();
-            
-            $found = false;
-            foreach ($users as $user) {
-                // Check all available tokens (in production, store properly)
-                $stmt = $db->prepare("SELECT reset_token FROM users WHERE username = ?");
-                $stmt->execute([$user['username']]);
-                $row = $stmt->fetch();
-                
-                if ($row && password_verify($token, $row['reset_token'])) {
-                    $found = $user['username'];
-                    break;
+    $token = $_POST['csrf_token'] ?? '';
+    if (!verify_csrf_token($token)) {
+        die("Security validation failed.");
+    }
+
+    $username = trim($_POST['username'] ?? '');
+    $old_password = $_POST['old_password'] ?? '';
+    $new_password = $_POST['new_password'] ?? '';
+    $confirm_password = $_POST['confirm_password'] ?? '';
+
+    if (!empty($username) && !empty($old_password) && !empty($new_password) && !empty($confirm_password)) {
+        if ($new_password === $confirm_password) {
+            $stmt = $db->prepare("SELECT id, password FROM users WHERE username = ?");
+            $stmt->execute([$username]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($old_password, $user['password'])) {
+                $hashed_password = password_hash($new_password, PASSWORD_BCRYPT);
+                $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $update_stmt->execute([$hashed_password, $user['id']]);
+
+                if (function_exists('log_sqlite_event')) {
+                    log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
                 }
-            }
-            
-            if ($found) {
-                // Update password
-                $hashed = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $db->prepare("UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE username = ?");
-                $stmt->execute([$hashed, $found]);
-                
-                $success = "Password updated successfully! You can now <a href='login.php'>login</a>.";
+                $success_msg = "Password updated successfully! You can now log in.";
             } else {
-                $error = 'Invalid or expired reset token.';
+                $error_msg = "Invalid username or old password.";
             }
+        } else {
+            $error_msg = "New passwords do not match.";
         }
+    } else {
+        $error_msg = "Please fill in all fields.";
     }
 }
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Reset Password - <?php echo $site_name; ?></title>
+    <meta charset="UTF-8">
+    <title>Reset Password - Daborey Text Note</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 30px; border-radius: 8px; border: 1px solid #334155; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        h2 { color: #38bdf8; margin-top: 0; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 8px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #0369a1; }
+        .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
+        .success { color: #4ade80; font-size: 13px; text-align: center; margin-bottom: 10px; }
+        a { color: #38bdf8; text-decoration: none; font-size: 13px; display: block; text-align: center; margin-top: 15px; }
+        a:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
-    <h1>Reset Password</h1>
-    
-    <?php if ($error): ?>
-        <p style="color: red;"><?php echo $error; ?></p>
-    <?php endif; ?>
-    
-    <?php if ($success): ?>
-        <p style="color: green;"><?php echo $success; ?></p>
-    <?php else: ?>
-        <?php if ($step === 'request'): ?>
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
-                
-                <div>
-                    <label>Username:</label>
-                    <input type="text" name="username" required>
-                </div>
-                
-                <button type="submit">Request Reset</button>
-            </form>
-        <?php else: ?>
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
-                <input type="hidden" name="token" value="<?php echo htmlspecialchars($_GET['token'] ?? ''); ?>">
-                
-                <div>
-                    <label>New Password:</label>
-                    <input type="password" name="password" required>
-                </div>
-                
-                <div>
-                    <label>Confirm Password:</label>
-                    <input type="password" name="confirm_password" required>
-                </div>
-                
-                <button type="submit">Reset Password</button>
-            </form>
+    <div class="card">
+        <h2>Reset Password</h2>
+        <?php if ($error_msg): ?>
+            <div class="error"><?php echo function_exists('sanitize') ? sanitize($error_msg) : htmlspecialchars($error_msg, ENT_QUOTES, 'UTF-8'); ?></div>
         <?php endif; ?>
-    <?php endif; ?>
-    
-    <p><a href="index.php">Home</a> | <a href="login.php">Login</a></p>
+        <?php if ($success_msg): ?>
+            <div class="success"><?php echo function_exists('sanitize') ? sanitize($success_msg) : htmlspecialchars($success_msg, ENT_QUOTES, 'UTF-8'); ?></div>
+        <?php endif; ?>
+        <form method="POST" action="reset_password.php">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+            <input type="text" name="username" placeholder="Username" required autofocus autocomplete="off">
+            <input type="password" name="old_password" placeholder="Old Password" required>
+            <input type="password" name="new_password" placeholder="New Password" required>
+            <input type="password" name="confirm_password" placeholder="Confirm New Password" required>
+            <button type="submit">Update Password</button>
+        </form>
+        <a href="login.php">Back to Login</a>
+    </div>
 </body>
 </html>
