@@ -74,9 +74,34 @@ function csrf_token() {
     return $_SESSION['csrf_token'];
 }
 
+// Alias for cross-project compatibility
+function generate_csrf_token() {
+    return csrf_token();
+}
+
 // Validate CSRF token
 function validate_csrf($token) {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+// Alias for cross-project compatibility
+function verify_csrf_token($token) {
+    return validate_csrf($token);
+}
+
+// Sanitize string output
+function sanitize($data) {
+    return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
+}
+
+// Audit Log Helper for SQLite
+function log_sqlite_event($db, $username, $event_type) {
+    try {
+        $stmt = $db->prepare("INSERT INTO logs (username, event_type, timestamp) VALUES (?, ?, datetime('now'))");
+        $stmt->execute([$username, $event_type]);
+    } catch (Exception $e) {
+        error_log("Failed to write audit log: " . $e->getMessage());
+    }
 }
 
 // Redirect helper
