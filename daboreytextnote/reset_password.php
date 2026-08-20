@@ -4,6 +4,7 @@
 // PROJECT: daboreytextnote
 // ============================================
 
+ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/functions.php';
 
@@ -13,35 +14,40 @@ $success_msg = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf_token'] ?? '';
     if (!verify_csrf_token($token)) {
-        die("Security validation failed.");
-    }
+        $error_msg = "Security token mismatch. Please refresh and try again.";
+    } else {
+        $username = trim($_POST['username'] ?? '');
+        $old_password = $_POST['old_password'] ?? '';
+        $new_password = $_POST['new_password'] ?? '';
+        $confirm_password = $_POST['confirm_password'] ?? '';
 
-    $username = trim($_POST['username'] ?? '');
-    $old_password = $_POST['old_password'] ?? '';
-    $new_password = $_POST['new_password'] ?? '';
-    $confirm_password = $_POST['confirm_password'] ?? '';
+        if (!empty($username) && !empty($old_password) && !empty($new_password) && !empty($confirm_password)) {
+            if ($new_password === $confirm_password) {
+                try {
+                    $stmt = $db->prepare("SELECT id, password FROM users WHERE username = ?");
+                    $stmt->execute([$username]);
+                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!empty($username) && !empty($old_password) && !empty($new_password) && !empty($confirm_password)) {
-        if ($new_password === $confirm_password) {
-            $stmt = $db->prepare("SELECT id, password FROM users WHERE username = ?");
-            $stmt->execute([$username]);
-            $user = $stmt->fetch();
+                    if ($user && password_verify($old_password, $user['password'])) {
+                        $hashed_password = password_hash($new_password, PASSWORD_BCRYPT);
+                        
+                        $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
+                        $update_stmt->execute([$hashed_password, $user['id']]);
 
-            if ($user && password_verify($old_password, $user['password'])) {
-                $hashed_password = password_hash($new_password, PASSWORD_BCRYPT);
-                $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
-                $update_stmt->execute([$hashed_password, $user['id']]);
-
-                log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
-                $success_msg = "Password updated successfully! You can now log in.";
+                        log_sqlite_event($db, $username, 'PASSWORD_CHANGE_SUCCESS');
+                        $success_msg = "Password updated successfully! You can now log in.";
+                    } else {
+                        $error_msg = "Invalid username or old password.";
+                    }
+                } catch (PDOException $e) {
+                    $error_msg = "Database Error: " . $e->getMessage();
+                }
             } else {
-                $error_msg = "Invalid username or old password.";
+                $error_msg = "New passwords do not match.";
             }
         } else {
-            $error_msg = "New passwords do not match.";
+            $error_msg = "Please fill in all fields.";
         }
-    } else {
-        $error_msg = "Please fill in all fields.";
     }
 }
 ?>
@@ -56,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
         input { width: 100%; padding: 10px; margin: 8px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
+        .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; word-break: break-word; }
         .success { color: #4ade80; font-size: 13px; text-align: center; margin-bottom: 10px; }
         a { color: #38bdf8; text-decoration: none; font-size: 13px; display: block; text-align: center; margin-top: 15px; }
     </style>

@@ -4,12 +4,12 @@
 // PROJECT: daboreytextnote
 // ============================================
 
+ob_start();
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/functions.php';
 
 $error_msg = "";
 
-// Redirect if already logged in
 if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
     exit;
@@ -19,33 +19,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = $_POST['csrf_token'] ?? '';
     
     if (!verify_csrf_token($token)) {
-        die("Security validation failed.");
-    }
-
-    $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
-
-    if (!empty($username) && !empty($password)) {
-        $stmt = $db->prepare("SELECT id, username, password FROM users WHERE username = ?");
-        $stmt->execute([$username]);
-        $user = $stmt->fetch();
-
-        if ($user && password_verify($password, $user['password'])) {
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            $_SESSION['last_activity'] = time();
-
-            unset($_SESSION['csrf_token']);
-            log_sqlite_event($db, $user['username'], 'LOGIN_SUCCESS');
-
-            header("Location: dashboard.php");
-            exit;
-        } else {
-            $error_msg = "Invalid username or password.";
-        }
+        $error_msg = "Invalid session token. Please try again.";
     } else {
-        $error_msg = "Please fill in all fields.";
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+
+        if (!empty($username) && !empty($password)) {
+            try {
+                $stmt = $db->prepare("SELECT id, username, password FROM users WHERE username = ?");
+                $stmt->execute([$username]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($user && password_verify($password, $user['password'])) {
+                    session_regenerate_id(true);
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['last_activity'] = time();
+
+                    unset($_SESSION['csrf_token']);
+                    log_sqlite_event($db, $user['username'], 'LOGIN_SUCCESS');
+
+                    header("Location: dashboard.php");
+                    exit;
+                } else {
+                    $error_msg = "Invalid username or password.";
+                }
+            } catch (PDOException $e) {
+                $error_msg = "Database Error: " . $e->getMessage();
+            }
+        } else {
+            $error_msg = "Please fill in all fields.";
+        }
     }
 }
 ?>
@@ -60,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
         input { width: 100%; padding: 10px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
+        .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; word-break: break-word; }
         .links { margin-top: 15px; text-align: center; font-size: 13px; }
         .links a { color: #38bdf8; text-decoration: none; margin: 0 5px; }
     </style>
