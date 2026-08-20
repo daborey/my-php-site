@@ -60,7 +60,9 @@ if (empty($_SESSION['csrf_token'])) {
         input { width: 100%; padding: 10px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
         .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
-        a { color: #38bdf8; text-decoration: none; font-size: 13px; display: block; text-align: center; margin-top: 15px; }
+        .links { margin-top: 15px; text-align: center; font-size: 13px; }
+        .links a { color: #38bdf8; text-decoration: none; margin: 0 5px; }
+        .links a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -75,7 +77,10 @@ if (empty($_SESSION['csrf_token'])) {
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Log In</button>
         </form>
-        <a href="/daboreystep2/register.php">Don't have an account? Register</a>
+        <div class="links">
+            <a href="/daboreystep2/reset_password.php">Reset Password</a> | 
+            <a href="/daboreystep2/register.php">Register</a>
+        </div>
     </div>
 </body>
 </html>
