@@ -17,16 +17,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $username = trim($_POST['username'] ?? '');
+    $old_password = $_POST['old_password'] ?? '';
     $new_password = $_POST['new_password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    if (!empty($username) && !empty($new_password) && !empty($confirm_password)) {
+    if (!empty($username) && !empty($old_password) && !empty($new_password) && !empty($confirm_password)) {
         if ($new_password === $confirm_password) {
-            $stmt = $db->prepare("SELECT id FROM users WHERE username = ?");
+            $stmt = $db->prepare("SELECT id, password FROM users WHERE username = ?");
             $stmt->execute([$username]);
             $user = $stmt->fetch();
 
-            if ($user) {
+            if ($user && password_verify($old_password, $user['password'])) {
                 $hashed_password = password_hash($new_password, PASSWORD_BCRYPT);
                 $update_stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
                 $update_stmt->execute([$hashed_password, $user['id']]);
@@ -36,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $success_msg = "Password updated successfully! You can now log in.";
             } else {
-                $error_msg = "Username not found.";
+                $error_msg = "Invalid username or old password.";
             }
         } else {
             $error_msg = "New passwords do not match.";
@@ -55,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .card { background: #1e293b; padding: 30px; border-radius: 8px; border: 1px solid #334155; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
+        input { width: 100%; padding: 10px; margin: 8px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
         button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
         button:hover { background: #0369a1; }
         .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
@@ -76,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="reset_password.php">
             <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
             <input type="text" name="username" placeholder="Username" required autofocus autocomplete="off">
+            <input type="password" name="old_password" placeholder="Old Password" required>
             <input type="password" name="new_password" placeholder="New Password" required>
             <input type="password" name="confirm_password" placeholder="Confirm New Password" required>
             <button type="submit">Update Password</button>
