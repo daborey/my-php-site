@@ -1,12 +1,72 @@
 <?php
 // ============================================
-// FILE: functions.php
-// PROJECT: daboreytextnote
+// FILE: daboreytextnote/functions.php
 // ============================================
+require_once 'config.php';
 
-require_once __DIR__ . '/config.php';
+// Register user
+function register($username, $password) {
+    global $db;
+    
+    if (strlen($username) < 3) return false;
+    if (strlen($password) < 6) return false;
+    
+    try {
+        $hashed = password_hash($password, PASSWORD_DEFAULT);
+        $stmt = $db->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+        return $stmt->execute([$username, $hashed]);
+    } catch (PDOException $e) {
+        return false;
+    }
+}
 
-// Safe CSRF Token Generation
+// Login user
+function login($username, $password) {
+    global $db;
+    
+    $stmt = $db->prepare("SELECT id, username, password FROM users WHERE username = ?");
+    $stmt->execute([$username]);
+    $user = $stmt->fetch();
+    
+    if ($user && password_verify($password, $user['password'])) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+        return true;
+    }
+    return false;
+}
+
+// Check if logged in
+function is_logged_in() {
+    return isset($_SESSION['user_id']);
+}
+
+// Logout cleanly
+function logout() {
+    $_SESSION = array();
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    session_destroy();
+    return true;
+}
+
+// Get current user
+function current_user() {
+    global $db;
+    
+    if (!is_logged_in()) return null;
+    
+    $stmt = $db->prepare("SELECT id, username FROM users WHERE id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    return $stmt->fetch();
+}
+
+// Generate CSRF token
 function csrf_token() {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -14,44 +74,14 @@ function csrf_token() {
     return $_SESSION['csrf_token'];
 }
 
-// Validate CSRF Token
+// Validate CSRF token
 function validate_csrf($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], (string)$token);
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
-// Sanitize String Output
-function sanitize($data) {
-    return htmlspecialchars(trim((string)$data), ENT_QUOTES, 'UTF-8');
-}
-
-// Check standard password requirements
-function validate_password($password) {
-    return strlen($password) >= 6;
-}
-
-// Check user login state
-function is_logged_in() {
-    return isset($_SESSION['user_id']);
-}
-
-// System Auditor Logger
-function log_sqlite_event($db, $username, $event_type) {
-    try {
-        if (!$db) return;
-        $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-        if (strpos($ip_address, ',') !== false) {
-            $ip_address = trim(explode(',', $ip_address)[0]);
-        }
-        $stmt = $db->prepare("INSERT INTO system_logs (username, event_type, ip_address) VALUES (?, ?, ?)");
-        $stmt->execute([$username, $event_type, $ip_address]);
-    } catch (Throwable $e) {
-        error_log("Logging error: " . $e->getMessage());
-    }
-}
-
-// Clean redirect helper
+// Redirect helper
 function redirect($url) {
-    header("Location: " . $url);
+    header("Location: $url");
     exit();
 }
 ?>
