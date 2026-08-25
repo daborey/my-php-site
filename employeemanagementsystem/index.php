@@ -5,7 +5,10 @@ header("Content-Type: text/html; charset=utf-8");
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// 2. Persistent Storage Setup
+// 2. Determine Script Self URL (Fixes subfolder redirect issues)
+$currentScript = $_SERVER['SCRIPT_NAME'];
+
+// 3. Persistent Storage Setup
 $storageDir = '/mnt/storage';
 $uploadsDir = $storageDir . '/employeeuploads';
 
@@ -16,7 +19,7 @@ if (!is_dir($uploadsDir)) {
     @mkdir($uploadsDir, 0777, true);
 }
 
-// ---------------- Handle IMAGE SERVING (Fixes Broken Images) ----------------
+// ---------------- Handle IMAGE SERVING ----------------
 if (isset($_GET["action"]) && $_GET["action"] === "view_image" && !empty($_GET["file"])) {
     $filename = basename($_GET["file"]);
     $filePath = $uploadsDir . '/' . $filename;
@@ -42,7 +45,7 @@ if (isset($_GET["action"]) && $_GET["action"] === "view_image" && !empty($_GET["
     }
 }
 
-// 3. Connect to SQLite database using PDO (employee.db)
+// 4. Connect to SQLite database using PDO (employee.db)
 try {
     $dbPath = $storageDir . '/employee.db';
     $db = new PDO("sqlite:$dbPath");
@@ -61,13 +64,13 @@ $SYSTEM_LOGO = '';
 $error = "";
 
 // Helper function to turn relative paths or raw filenames into full view URLs
-function getImageUrl($path) {
+function getImageUrl($path, $scriptUrl) {
     if (empty($path)) return '';
     if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0 || strpos($path, 'data:') === 0) {
         return $path;
     }
     $filename = basename($path);
-    return 'index.php?action=view_image&file=' . urlencode($filename);
+    return $scriptUrl . '?action=view_image&file=' . urlencode($filename);
 }
 
 // Ensure records table exists safely
@@ -98,10 +101,10 @@ foreach ($SCHEMA_FIELDS as $field) {
 }
 
 // Helper to remove files safely from persistent volume
-function removeImageFile($path) {
+function removeImageFile($path, $uploadsDir) {
     if (!empty($path) && strpos($path, 'http') !== 0 && strpos($path, 'data:') !== 0) {
         $filename = basename($path);
-        $full_path = '/mnt/storage/employeeuploads/' . $filename;
+        $full_path = $uploadsDir . '/' . $filename;
         if (file_exists($full_path) && is_file($full_path)) {
             @unlink($full_path);
         }
@@ -188,13 +191,13 @@ if (isset($_GET["action"]) && $_GET["action"] === "delete" && isset($_GET["id"])
         $stmt->execute([':id' => $id]);
         $res = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($res) {
-            removeImageFile($res["avatar"]);
+            removeImageFile($res["avatar"], $uploadsDir);
             
             $del_stmt = $db->prepare("DELETE FROM records WHERE id = :id");
             $del_stmt->execute([':id' => $id]);
         }
     }
-    header("Location: index.php");
+    header("Location: " . $currentScript);
     exit;
 }
 
@@ -226,9 +229,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
             if (move_uploaded_file($tmp_name, $destination)) {
                 chmod($destination, 0666);
                 if ($action === "update" && !empty($existing["avatar"])) {
-                    removeImageFile($existing["avatar"]);
+                    removeImageFile($existing["avatar"], $uploadsDir);
                 }
-                $avatar_path = "employeeuploads/" . $filename;
+                $avatar_path = $filename; // Store filename directly
             } else {
                 $error = "Failed to upload file to volume storage. Check folder permissions.";
             }
@@ -240,7 +243,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
         $url = trim($_POST["avatar_url"]);
         if (filter_var($url, FILTER_VALIDATE_URL)) {
             if ($action === "update" && !empty($existing["avatar"])) {
-                removeImageFile($existing["avatar"]);
+                removeImageFile($existing["avatar"], $uploadsDir);
             }
             $avatar_path = $url;
         } else {
@@ -285,7 +288,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
             }
         }
 
-        header("Location: index.php");
+        header("Location: " . $currentScript);
         exit;
     }
 }
@@ -376,7 +379,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
 <div class="navbar">
     <div class="navbar-brand">
         <?php if (!empty($SYSTEM_LOGO)): ?>
-            <?php $logo_src = getImageUrl($SYSTEM_LOGO); ?>
+            <?php $logo_src = getImageUrl($SYSTEM_LOGO, $currentScript); ?>
             <img src="<?= htmlspecialchars($logo_src, ENT_QUOTES, "UTF-8") ?>" alt="Logo">
         <?php endif; ?>
         <h1 class="navbar-title"><?= htmlspecialchars($SYSTEM_NAME, ENT_QUOTES, "UTF-8") ?></h1>
@@ -392,7 +395,8 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
         <div class="card-header">
             <h2 class="card-title"><?= $edit_data ? "Edit Record" : "New Entry" ?></h2>
         </div>
-        <form method="POST" enctype="multipart/form-data">
+        <!-- Explicit action ensures POST requests submit back to this folder's script -->
+        <form method="POST" action="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>" enctype="multipart/form-data">
             <input type="hidden" name="action" value="<?= $edit_data ? "update" : "create" ?>">
             <?php if ($edit_data): ?>
                 <input type="hidden" name="id" value="<?= $edit_data["id"] ?>">
@@ -404,7 +408,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                     <?php 
                     $initial_img = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24' fill='%23cbd5e1'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
                     if ($edit_data && !empty($edit_data["avatar"])) {
-                        $initial_img = getImageUrl($edit_data["avatar"]);
+                        $initial_img = getImageUrl($edit_data["avatar"], $currentScript);
                     }
                     ?>
                     <img id="avatar-preview" src="<?= htmlspecialchars($initial_img, ENT_QUOTES, "UTF-8") ?>" class="avatar-preview" alt="Preview">
@@ -424,7 +428,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
 
             <button type="submit" class="btn btn-primary"><?= $edit_data ? "Update Record" : "Save Record" ?></button>
             <?php if ($edit_data): ?>
-                <a href="index.php" class="btn btn-secondary">Cancel</a>
+                <a href="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>" class="btn btn-secondary">Cancel</a>
             <?php endif; ?>
         </form>
     </div>
@@ -432,7 +436,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
     <div class="card">
         <div class="card-header">
             <h2 class="card-title">All Records</h2>
-            <a href="index.php?action=export" class="btn btn-excel">Export XLS</a>
+            <a href="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>?action=export" class="btn btn-excel">Export XLS</a>
         </div>
         
         <div class="table-container">
@@ -452,7 +456,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                         <tr>
                             <td>
                                 <?php if (!empty($row["avatar"])): ?>
-                                    <img src="<?= htmlspecialchars(getImageUrl($row["avatar"]), ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
+                                    <img src="<?= htmlspecialchars(getImageUrl($row["avatar"], $currentScript), ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
                                 <?php else: ?>
                                     <span style="color: #64748b; font-size: 12px;">None</span>
                                 <?php endif; ?>
@@ -462,8 +466,8 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                             <?php endforeach; ?>
                             <td>
                                 <div class="action-links">
-                                    <a href="index.php?action=edit&id=<?= $row["id"] ?>" class="btn-action">Edit</a>
-                                    <a href="index.php?action=delete&id=<?= $row["id"] ?>" class="btn-action btn-action-delete" onclick="return confirm('Delete this record?')">Delete</a>
+                                    <a href="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>?action=edit&id=<?= $row["id"] ?>" class="btn-action">Edit</a>
+                                    <a href="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>?action=delete&id=<?= $row["id"] ?>" class="btn-action btn-action-delete" onclick="return confirm('Delete this record?')">Delete</a>
                                 </div>
                             </td>
                         </tr>
