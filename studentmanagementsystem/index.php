@@ -5,12 +5,44 @@ header("Content-Type: text/html; charset=utf-8");
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// 2. Connect to persistent SQLite database using PDO (student.db)
+// 2. Persistent Storage Setup
 $storageDir = '/mnt/storage';
+$uploadsDir = $storageDir . '/uploads';
+
 if (!is_dir($storageDir)) {
-    mkdir($storageDir, 0777, true);
+    @mkdir($storageDir, 0777, true);
+}
+if (!is_dir($uploadsDir)) {
+    @mkdir($uploadsDir, 0777, true);
 }
 
+// ---------------- Handle IMAGE SERVING (Fixes Broken Images) ----------------
+if (isset($_GET["action"]) && $_GET["action"] === "view_image" && !empty($_GET["file"])) {
+    $filename = basename($_GET["file"]);
+    $filePath = $uploadsDir . '/' . $filename;
+
+    if (file_exists($filePath) && is_file($filePath)) {
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $mimeTypes = [
+            'jpg'  => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png'  => 'image/png',
+            'gif'  => 'image/gif',
+            'webp' => 'image/webp'
+        ];
+        
+        $mime = $mimeTypes[$ext] ?? 'application/octet-stream';
+        header("Content-Type: " . $mime);
+        header("Content-Length: " . filesize($filePath));
+        readfile($filePath);
+        exit;
+    } else {
+        header("HTTP/1.0 404 Not Found");
+        exit("Image not found.");
+    }
+}
+
+// 3. Connect to SQLite database using PDO (student.db)
 try {
     $dbPath = $storageDir . '/student.db';
     $db = new PDO("sqlite:$dbPath");
@@ -28,6 +60,16 @@ $SCHEMA_FIELDS = array (
 );
 $SYSTEM_LOGO = 'uploads/logo_6a8d888b85ca3.jpg';
 $error = "";
+
+// Helper function to turn relative paths or raw filenames into full view URLs
+function getImageUrl($path) {
+    if (empty($path)) return '';
+    if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0 || strpos($path, 'data:') === 0) {
+        return $path;
+    }
+    $filename = basename($path);
+    return 'index.php?action=view_image&file=' . urlencode($filename);
+}
 
 // Ensure records table exists safely
 $cols = [
@@ -58,15 +100,16 @@ foreach ($SCHEMA_FIELDS as $field) {
 
 // Helper to remove files safely from persistent volume
 function removeImageFile($path) {
-    if (!empty($path) && strpos($path, "uploads/") === 0) {
-        $full_path = '/mnt/storage/' . $path;
+    if (!empty($path) && strpos($path, 'http') !== 0 && strpos($path, 'data:') !== 0) {
+        $filename = basename($path);
+        $full_path = '/mnt/storage/uploads/' . $filename;
         if (file_exists($full_path) && is_file($full_path)) {
-            unlink($full_path);
+            @unlink($full_path);
         }
     }
 }
 
-// ---------------- Handle EXCEL (.xls) EXPORT (Simplified HTML Table) ----------------
+// ---------------- Handle EXCEL (.xls) EXPORT ----------------
 if (isset($_GET["action"]) && $_GET["action"] === "export") {
     $clean_sys_name = preg_replace("/[^a-zA-Z0-9_\-]/", "_", $SYSTEM_NAME);
     $clean_sys_name = trim(preg_replace("/_+/", "_", $clean_sys_name), "_");
@@ -148,24 +191,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
         }
     }
 
-    $target_dir = "/mnt/storage/uploads/";
-    if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0777, true);
-    }
-
     if (isset($_FILES["avatar"]) && $_FILES["avatar"]["error"] === UPLOAD_ERR_OK) {
         $tmp_name = $_FILES["avatar"]["tmp_name"];
         $ext = strtolower(pathinfo($_FILES["avatar"]["name"], PATHINFO_EXTENSION));
         
         if (in_array($ext, $allowed)) {
             $filename = uniqid("img_", true) . "." . $ext;
-            if (move_uploaded_file($tmp_name, $target_dir . $filename)) {
+            $destination = $uploadsDir . '/' . $filename;
+            
+            if (move_uploaded_file($tmp_name, $destination)) {
+                chmod($destination, 0666);
                 if ($action === "update" && !empty($existing["avatar"])) {
                     removeImageFile($existing["avatar"]);
                 }
                 $avatar_path = "uploads/" . $filename;
             } else {
-                $error = "Failed to upload file to volume storage.";
+                $error = "Failed to upload file to volume storage. Check folder permissions.";
             }
         } else {
             $error = "Invalid file format! Allowed: JPG, JPEG, PNG, GIF, WEBP.";
@@ -311,8 +352,8 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
 <div class="navbar">
     <div class="navbar-brand">
         <?php if (!empty($SYSTEM_LOGO)): ?>
-            <?php $logo_src = (strpos($SYSTEM_LOGO, "http") === 0) ? $SYSTEM_LOGO : htmlspecialchars($SYSTEM_LOGO, ENT_QUOTES, "UTF-8"); ?>
-            <img src="<?= $logo_src ?>" alt="Logo">
+            <?php $logo_src = getImageUrl($SYSTEM_LOGO); ?>
+            <img src="<?= htmlspecialchars($logo_src, ENT_QUOTES, "UTF-8") ?>" alt="Logo">
         <?php endif; ?>
         <h1 class="navbar-title"><?= htmlspecialchars($SYSTEM_NAME, ENT_QUOTES, "UTF-8") ?></h1>
     </div>
@@ -339,10 +380,10 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                     <?php 
                     $initial_img = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24' fill='%23cbd5e1'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
                     if ($edit_data && !empty($edit_data["avatar"])) {
-                        $initial_img = htmlspecialchars($edit_data["avatar"], ENT_QUOTES, "UTF-8");
+                        $initial_img = getImageUrl($edit_data["avatar"]);
                     }
                     ?>
-                    <img id="avatar-preview" src="<?= $initial_img ?>" class="avatar-preview" alt="Preview">
+                    <img id="avatar-preview" src="<?= htmlspecialchars($initial_img, ENT_QUOTES, "UTF-8") ?>" class="avatar-preview" alt="Preview">
                     <div class="avatar-inputs">
                         <input type="file" name="avatar" class="form-control" accept="image/*" onchange="previewAvatarFile(this)">
                         <input type="url" name="avatar_url" class="form-control" placeholder="Or Image URL" oninput="previewAvatarUrl(this.value)" value="<?= ($edit_data && strpos($edit_data['avatar'], 'http') === 0) ? htmlspecialchars($edit_data['avatar'], ENT_QUOTES, 'UTF-8') : '' ?>">
@@ -387,7 +428,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                         <tr>
                             <td>
                                 <?php if (!empty($row["avatar"])): ?>
-                                    <img src="<?= htmlspecialchars($row["avatar"], ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
+                                    <img src="<?= htmlspecialchars(getImageUrl($row["avatar"]), ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
                                 <?php else: ?>
                                     <span style="color: #64748b; font-size: 12px;">None</span>
                                 <?php endif; ?>
