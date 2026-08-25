@@ -5,22 +5,12 @@ header("Content-Type: text/html; charset=utf-8");
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
-// 2. Dynamic Path Resolution for Subfolders
+// 2. Determine Script Self URL (Fixes subfolder redirect issues)
 $currentScript = $_SERVER['SCRIPT_NAME'];
 
-// 3. System & Database Configuration
-$SYSTEM_NAME = 'employee';
-$DATABASE_NAME = 'employee.db'; // Switched dynamically to employee database
-
-$SCHEMA_FIELDS = array (
-  0 => 'ឈ្មោះបុគ្គលិក', // Employee Name
-  1 => 'តួនាទី',        // Position / Role
-  2 => 'ប្រាក់ខែ',      // Salary / Rate
-);
-
-// 4. Persistent Storage Setup
+// 3. Persistent Storage Setup
 $storageDir = '/mnt/storage';
-$uploadsDir = $storageDir . '/uploads';
+$uploadsDir = $storageDir . '/employeeuploads';
 
 if (!is_dir($storageDir)) {
     @mkdir($storageDir, 0777, true);
@@ -55,28 +45,32 @@ if (isset($_GET["action"]) && $_GET["action"] === "view_image" && !empty($_GET["
     }
 }
 
-// 5. Connect to SQLite database using PDO (employee.db)
+// 4. Connect to SQLite database using PDO (employee.db)
 try {
-    $dbPath = $storageDir . '/' . $DATABASE_NAME;
+    $dbPath = $storageDir . '/employee.db';
     $db = new PDO("sqlite:$dbPath");
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $db.exec("PRAGMA encoding = 'UTF-8';");
+    $db->exec("PRAGMA encoding = 'UTF-8';");
 } catch (PDOException $e) {
     die("Database connection failed. Please check server configuration.");
 }
 
-$SYSTEM_LOGO = 'uploads/logo_6a8d888b85ca3.jpg';
+$SYSTEM_NAME = 'employee';
+$SCHEMA_FIELDS = array (
+  0 => 'ឆ្នាំ',
+  1 => 'ឈ្មោះ',
+);
+$SYSTEM_LOGO = '';
 $error = "";
 
-// Helper function using current dynamic script URL
-function getImageUrl($path) {
-    global $currentScript;
+// Helper function to turn relative paths or raw filenames into full view URLs
+function getImageUrl($path, $scriptUrl) {
     if (empty($path)) return '';
     if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0 || strpos($path, 'data:') === 0) {
         return $path;
     }
     $filename = basename($path);
-    return $currentScript . '?action=view_image&file=' . urlencode($filename);
+    return $scriptUrl . '?action=view_image&file=' . urlencode($filename);
 }
 
 // Ensure records table exists safely
@@ -107,8 +101,7 @@ foreach ($SCHEMA_FIELDS as $field) {
 }
 
 // Helper to remove files safely from persistent volume
-function removeImageFile($path) {
-    global $uploadsDir;
+function removeImageFile($path, $uploadsDir) {
     if (!empty($path) && strpos($path, 'http') !== 0 && strpos($path, 'data:') !== 0) {
         $filename = basename($path);
         $full_path = $uploadsDir . '/' . $filename;
@@ -133,34 +126,59 @@ if (isset($_GET["action"]) && $_GET["action"] === "export") {
     header("Pragma: no-cache");
     header("Expires: 0");
 
-    echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-    echo '<head><meta charset="utf-8" /></head>';
-    echo '<body>';
-    echo '<table border="1" style="border-collapse: collapse;">';
-    echo '<tr style="background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center;">';
-    echo '<th style="padding: 10px;">ID</th>';
+    echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
+    echo '<?mso-application progid="Excel.Sheet"?>' . "\n";
+    echo '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ';
+    echo 'xmlns:o="urn:schemas-microsoft-com:office:office" ';
+    echo 'xmlns:x="urn:schemas-microsoft-com:office:excel" ';
+    echo 'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' . "\n";
+    echo '  <Styles>' . "\n";
+    echo '    <Style ss:ID="Header">' . "\n";
+    echo '      <Font ss:Bold="1" ss:Color="#FFFFFF"/>' . "\n";
+    echo '      <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>' . "\n";
+    echo '      <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>' . "\n";
+    echo '    </Style>' . "\n";
+    echo '    <Style ss:ID="Data">' . "\n";
+    echo '      <Alignment ss:Vertical="Center"/>' . "\n";
+    echo '    </Style>' . "\n";
+    echo '  </Styles>' . "\n";
+    echo '  <Worksheet ss:Name="Records">' . "\n";
+    echo '    <Table>' . "\n";
+    echo '      <Row ss:StyleID="Header">' . "\n";
+    echo '        <Cell><Data ss:Type="String">ID</Data></Cell>' . "\n";
     foreach ($SCHEMA_FIELDS as $field) {
-        echo '<th style="padding: 10px;">' . htmlspecialchars($field, ENT_QUOTES, "UTF-8") . '</th>';
+        echo '        <Cell><Data ss:Type="String">' . htmlspecialchars($field, ENT_QUOTES, "UTF-8") . '</Data></Cell>' . "\n";
     }
-    echo '<th style="padding: 10px;">Profile Image Link / Path</th>';
-    echo '<th style="padding: 10px;">Created At</th>';
-    echo '</tr>';
+    echo '        <Cell><Data ss:Type="String">Profile Image Link / Path</Data></Cell>' . "\n";
+    echo '        <Cell><Data ss:Type="String">Created At</Data></Cell>' . "\n";
+    echo '      </Row>' . "\n";
 
     $stmt = $db->query("SELECT * FROM records ORDER BY id ASC");
     if ($stmt) {
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            echo '<tr>';
-            echo '<td style="padding: 8px; text-align: center;">' . $row["id"] . '</td>';
+            $img_display = $row["avatar"] ?? "";
+            $is_url = (strpos($img_display, "http://") === 0 || strpos($img_display, "https://") === 0);
+
+            echo '      <Row ss:StyleID="Data">' . "\n";
+            echo '        <Cell><Data ss:Type="Number">' . $row["id"] . '</Data></Cell>' . "\n";
             foreach ($SCHEMA_FIELDS as $field) {
-                echo '<td style="padding: 8px;">' . htmlspecialchars($row[$field] ?? "", ENT_QUOTES, "UTF-8") . '</td>';
+                echo '        <Cell><Data ss:Type="String">' . htmlspecialchars($row[$field] ?? "", ENT_QUOTES, "UTF-8") . '</Data></Cell>' . "\n";
             }
-            echo '<td style="padding: 8px;">' . htmlspecialchars($row["avatar"] ?? "", ENT_QUOTES, "UTF-8") . '</td>';
-            echo '<td style="padding: 8px;">' . htmlspecialchars($row["created_at"] ?? "", ENT_QUOTES, "UTF-8") . '</td>';
-            echo '</tr>';
+            
+            if ($is_url) {
+                echo '        <Cell ss:HRef="' . htmlspecialchars($img_display, ENT_QUOTES, "UTF-8") . '"><Data ss:Type="String">' . htmlspecialchars($img_display, ENT_QUOTES, "UTF-8") . '</Data></Cell>' . "\n";
+            } else {
+                echo '        <Cell><Data ss:Type="String">' . htmlspecialchars($img_display, ENT_QUOTES, "UTF-8") . '</Data></Cell>' . "\n";
+            }
+
+            echo '        <Cell><Data ss:Type="String">' . htmlspecialchars($row["created_at"] ?? "", ENT_QUOTES, "UTF-8") . '</Data></Cell>' . "\n";
+            echo '      </Row>' . "\n";
         }
     }
-    echo '</table>';
-    echo '</body></html>';
+
+    echo '    </Table>' . "\n";
+    echo '  </Worksheet>' . "\n";
+    echo '</Workbook>' . "\n";
     exit;
 }
 
@@ -173,7 +191,7 @@ if (isset($_GET["action"]) && $_GET["action"] === "delete" && isset($_GET["id"])
         $stmt->execute([':id' => $id]);
         $res = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($res) {
-            removeImageFile($res["avatar"]);
+            removeImageFile($res["avatar"], $uploadsDir);
             
             $del_stmt = $db->prepare("DELETE FROM records WHERE id = :id");
             $del_stmt->execute([':id' => $id]);
@@ -211,9 +229,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
             if (move_uploaded_file($tmp_name, $destination)) {
                 chmod($destination, 0666);
                 if ($action === "update" && !empty($existing["avatar"])) {
-                    removeImageFile($existing["avatar"]);
+                    removeImageFile($existing["avatar"], $uploadsDir);
                 }
-                $avatar_path = "uploads/" . $filename;
+                $avatar_path = $filename; // Store filename directly
             } else {
                 $error = "Failed to upload file to volume storage. Check folder permissions.";
             }
@@ -225,7 +243,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"])) {
         $url = trim($_POST["avatar_url"]);
         if (filter_var($url, FILTER_VALIDATE_URL)) {
             if ($action === "update" && !empty($existing["avatar"])) {
-                removeImageFile($existing["avatar"]);
+                removeImageFile($existing["avatar"], $uploadsDir);
             }
             $avatar_path = $url;
         } else {
@@ -304,7 +322,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
         .navbar { display: flex; align-items: center; justify-content: space-between; background-color: #ffffff; padding: 16px 24px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 24px; }
         .navbar-brand { display: flex; align-items: center; gap: 14px; }
         .navbar-brand img { height: 38px; border-radius: 6px; object-fit: contain; }
-        .navbar-title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; text-transform: capitalize; }
+        .navbar-title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; }
 
         .main-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
         .card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; overflow: hidden; }
@@ -361,7 +379,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
 <div class="navbar">
     <div class="navbar-brand">
         <?php if (!empty($SYSTEM_LOGO)): ?>
-            <?php $logo_src = getImageUrl($SYSTEM_LOGO); ?>
+            <?php $logo_src = getImageUrl($SYSTEM_LOGO, $currentScript); ?>
             <img src="<?= htmlspecialchars($logo_src, ENT_QUOTES, "UTF-8") ?>" alt="Logo">
         <?php endif; ?>
         <h1 class="navbar-title"><?= htmlspecialchars($SYSTEM_NAME, ENT_QUOTES, "UTF-8") ?></h1>
@@ -377,6 +395,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
         <div class="card-header">
             <h2 class="card-title"><?= $edit_data ? "Edit Record" : "New Entry" ?></h2>
         </div>
+        <!-- Explicit action ensures POST requests submit back to this folder's script -->
         <form method="POST" action="<?= htmlspecialchars($currentScript, ENT_QUOTES, "UTF-8") ?>" enctype="multipart/form-data">
             <input type="hidden" name="action" value="<?= $edit_data ? "update" : "create" ?>">
             <?php if ($edit_data): ?>
@@ -389,7 +408,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                     <?php 
                     $initial_img = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 24 24' fill='%23cbd5e1'><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/></svg>";
                     if ($edit_data && !empty($edit_data["avatar"])) {
-                        $initial_img = getImageUrl($edit_data["avatar"]);
+                        $initial_img = getImageUrl($edit_data["avatar"], $currentScript);
                     }
                     ?>
                     <img id="avatar-preview" src="<?= htmlspecialchars($initial_img, ENT_QUOTES, "UTF-8") ?>" class="avatar-preview" alt="Preview">
@@ -437,7 +456,7 @@ $results = $db->query("SELECT * FROM records ORDER BY id ASC");
                         <tr>
                             <td>
                                 <?php if (!empty($row["avatar"])): ?>
-                                    <img src="<?= htmlspecialchars(getImageUrl($row["avatar"]), ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
+                                    <img src="<?= htmlspecialchars(getImageUrl($row["avatar"], $currentScript), ENT_QUOTES, "UTF-8") ?>" class="avatar-thumb">
                                 <?php else: ?>
                                     <span style="color: #64748b; font-size: 12px;">None</span>
                                 <?php endif; ?>
