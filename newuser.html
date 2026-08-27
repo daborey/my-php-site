@@ -21,6 +21,12 @@ command: net localgroup Administrators
 switch without restart
 
 command: tsdiscon
+        
+delete user and folder
+command: net user <username> /delete
+    folder (when create new users it create user folder too)
+command: rd /s /q "C:\Users\<username>"
+    
     </pre>
 </body>
 
