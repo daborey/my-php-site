@@ -314,7 +314,7 @@ try {
     <div class="note-creator-container">
         <form class="note-creator" method="POST" action="/daboreytextnote/index.php">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-            <input type="text" name="title" placeholder="ចំណងជើង (Ttle)..." autocomplete="off" required>
+            <input type="text" name="title" placeholder="ចំណងជើង (Title)..." autocomplete="off" required>
             <textarea name="content" placeholder="សរសេរកំណត់ចំណាំទីនេះ (Take a note...)" required></textarea>
             <div class="actions">
                 <button type="submit">រក្សាទុក</button>
