@@ -330,9 +330,21 @@ try {
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
-                    <div class="note-date">
-                        <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
+                    
+                    <!-- NEW DELETE BUTTON START -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                        <form method="POST" action="/daboreytextnote/index.php" onsubmit="return confirm('Are you sure you want to delete this note?');" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
+                            <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
+                        </form>
+                        <div class="note-date">
+                            <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
+                        </div>
                     </div>
+                    <!-- NEW DELETE BUTTON END -->
+
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
