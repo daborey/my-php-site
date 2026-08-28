@@ -84,28 +84,46 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 6. Handle Form Submissions (Note Creation)
+// 6. Handle Form Submissions (Create & Delete)
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'CSRF_VALIDATION_FAILURE');
         die("Security token validation failed.");
     }
 
-    $title = trim($_POST['title'] ?? '');
-    $content = trim($_POST['content'] ?? '');
+    $action = $_POST['action'] ?? 'create';
 
-    if (!empty($title) || !empty($content)) {
-        try {
-            $stmt = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
-            if ($stmt->execute([$user_id, $title, $content])) {
-                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_CREATED_SUCCESSFULLY');
+    // Handle Note Deletion
+    if ($action === 'delete') {
+        $note_id = (int)($_POST['note_id'] ?? 0);
+        if ($note_id > 0) {
+            try {
+                $stmt = $db->prepare("DELETE FROM notes WHERE id = ? AND user_id = ?");
+                $stmt->execute([$note_id, $user_id]);
+                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_DELETED');
                 header("Location: /daboreytextnote/index.php");
                 exit;
-            } else {
-                $status_msg = "Error saving note.";
+            } catch (PDOException $e) {
+                $status_msg = "Error deleting note: " . $e->getMessage();
             }
-        } catch (PDOException $e) {
-            $status_msg = "Database error: " . $e->getMessage();
+        }
+    } 
+    // Handle Note Creation
+    else {
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+
+        if (!empty($title) || !empty($content)) {
+            try {
+                $stmt = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
+                if ($stmt->execute([$user_id, $title, $content])) {
+                    log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_CREATED');
+                    header("Location: /daboreytextnote/index.php");
+                    exit;
+                }
+            } catch (PDOException $e) {
+                $status_msg = "Database error: " . $e->getMessage();
+            }
         }
     }
 }
@@ -134,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['
 // 7. Fetch User Notes
 $notes = [];
 try {
-    $stmt = $db->prepare("SELECT title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC");
+    $stmt = $db->prepare("SELECT id, title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC");
     $stmt->execute([$user_id]);
     $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -312,21 +330,11 @@ try {
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
-                        <form method="POST" action="/daboreytextnote/index.php" onsubmit="return confirm('Are you sure you want to delete this note?');" style="margin: 0;">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-                            <input type="hidden" name="action" value="delete">
-                            <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
-                            <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; transition: background 0.2s;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Delete</button>
-                        </form>
-                        <div class="note-date">
-                            <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
-                        </div>
+                    <div class="note-date">
+                        <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
                     </div>
                 </div>
             <?php endforeach; ?>
-        <?php else: ?>
-            <div class="no-notes">មិនទាន់មានកំណត់ចំណាំនៅឡើយទេ។ (No notes found.)</div>
         <?php endif; ?>
     </div>
 
