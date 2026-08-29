@@ -1,4 +1,15 @@
 <?php
+
+$requestUri = $_SERVER['REQUEST_URI'];
+$parsedUrl  = parse_url($requestUri);
+$path       = $parsedUrl['path'] ?? '';
+
+if (!str_ends_with($path, '/') && !pathinfo($path, PATHINFO_EXTENSION)) {
+    $queryString = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
+    header("Location: " . $path . '/' . $queryString, true, 301);
+    exit;
+}
+
 // Enable error display to prevent blank white screens during debugging
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -120,6 +131,7 @@ try {
 ?>
 <!DOCTYPE html>
 <html lang="km">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -131,36 +143,196 @@ try {
             document.getElementById('edit_content').value = content;
             document.getElementById('editModal').style.display = 'flex';
         }
+
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
         }
     </script>
     <style>
-        body { font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 15px 40px; background: #1e293b; border-bottom: 1px solid #334155; border-radius: 8px; margin-bottom: 30px; flex-wrap: wrap; gap: 20px; }
-        .header-title-zone h1 { font-size: 24px; color: #38bdf8; margin: 0 0 5px 0; }
-        .user-info { font-size: 14px; color: #94a3b8; }
-        .btn-logout { padding: 8px 16px; background: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 15px; }
-        .clock-container { background-color: #090a0f; padding: 10px 15px; border-radius: 8px; border: 1px solid #383121; display: grid; grid-template-columns: repeat(4, 70px); gap: 6px; text-align: center; }
-        .clock-cell { background-color: #161922; padding: 6px 4px; border-radius: 4px; border: 1px solid #2d2618; }
-        .cell-label { font-size: 10px; color: #d1b477; margin-bottom: 2px; display: block; }
-        .cell-value { font-size: 20px; font-weight: bold; color: #ffb700; }
-        .date-cell { grid-column: span 4; padding: 4px; font-size: 12px; color: #bdc5e1; display: flex; justify-content: space-around; font-weight: 500; }
-        .day-highlight { color: #ffb700; font-weight: bold; }
-        .note-creator-container { display: flex; justify-content: center; margin-bottom: 40px; }
-        .note-creator { background: #1e293b; width: 100%; max-width: 500px; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
-        .note-creator input, .note-creator textarea { width: 100%; background: transparent; border: none; color: #f8fafc; outline: none; box-sizing: border-box; }
-        .note-creator input { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
-        .note-creator textarea { font-size: 14px; min-height: 80px; resize: none; }
-        .note-creator .actions { display: flex; justify-content: flex-end; margin-top: 10px; }
-        .note-creator button { background: #0284c7; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; }
-        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; max-width: 1200px; margin: 0 auto; }
-        .note-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; word-wrap: break-word; }
-        .note-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin: 0 0 8px 0; }
-        .note-content { font-size: 14px; color: #cbd5e1; white-space: pre-wrap; margin: 0 0 12px 0; flex-grow: 1; }
-        .note-date { font-size: 11px; color: #64748b; text-align: right; }
+        body {
+            font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-title-zone h1 {
+            font-size: 24px;
+            color: #38bdf8;
+            margin: 0 0 5px 0;
+        }
+
+        .user-info {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-left: 15px;
+        }
+
+        .clock-container {
+            background-color: #090a0f;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #383121;
+            display: grid;
+            grid-template-columns: repeat(4, 70px);
+            gap: 6px;
+            text-align: center;
+        }
+
+        .clock-cell {
+            background-color: #161922;
+            padding: 6px 4px;
+            border-radius: 4px;
+            border: 1px solid #2d2618;
+        }
+
+        .cell-label {
+            font-size: 10px;
+            color: #d1b477;
+            margin-bottom: 2px;
+            display: block;
+        }
+
+        .cell-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ffb700;
+        }
+
+        .date-cell {
+            grid-column: span 4;
+            padding: 4px;
+            font-size: 12px;
+            color: #bdc5e1;
+            display: flex;
+            justify-content: space-around;
+            font-weight: 500;
+        }
+
+        .day-highlight {
+            color: #ffb700;
+            font-weight: bold;
+        }
+
+        .note-creator-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
+
+        .note-creator {
+            background: #1e293b;
+            width: 100%;
+            max-width: 500px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .note-creator input,
+        .note-creator textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .note-creator input {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .note-creator textarea {
+            font-size: 14px;
+            min-height: 80px;
+            resize: none;
+        }
+
+        .note-creator .actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+
+        .note-creator button {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .notes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .note-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            word-wrap: break-word;
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin: 0 0 8px 0;
+        }
+
+        .note-content {
+            font-size: 14px;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            margin: 0 0 12px 0;
+            flex-grow: 1;
+        }
+
+        .note-date {
+            font-size: 11px;
+            color: #64748b;
+            text-align: right;
+        }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -173,10 +345,18 @@ try {
         </div>
 
         <div class="clock-container">
-            <div class="clock-cell"><span class="cell-label">ម៉ោង</span><div id="hours" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">នាទី</span><div id="minutes" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">វិនាទី</span><div id="seconds" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">ពេល</span><div id="ampm" class="cell-value" style="font-size:16px;">AM</div></div>
+            <div class="clock-cell"><span class="cell-label">ម៉ោង</span>
+                <div id="hours" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">នាទី</span>
+                <div id="minutes" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">វិនាទី</span>
+                <div id="seconds" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">ពេល</span>
+                <div id="ampm" class="cell-value" style="font-size:16px;">AM</div>
+            </div>
             <div class="date-cell"><span id="khmer-day" class="day-highlight">---</span><span id="khmer-date">00 --- 0000</span></div>
         </div>
     </header>
@@ -255,11 +435,15 @@ try {
             const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
             const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
             const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-            function toKhmerNum(num) { return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join(''); }
+
+            function toKhmerNum(num) {
+                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+            }
             const now = new Date();
             let rawHours = now.getHours();
             const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-            rawHours = rawHours % 12; rawHours = rawHours ? rawHours : 12;
+            rawHours = rawHours % 12;
+            rawHours = rawHours ? rawHours : 12;
             document.getElementById('hours').innerText = toKhmerNum(rawHours);
             document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
             document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
@@ -271,4 +455,5 @@ try {
         setInterval(updateKhmerClock, 1000);
     </script>
 </body>
+
 </html>
