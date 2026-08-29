@@ -1,10 +1,15 @@
 <?php
+// Enable error display to prevent blank white screens during debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 if (file_exists(__DIR__ . '/config.php')) require_once __DIR__ . '/config.php';
 if (file_exists(__DIR__ . '/security.php')) require_once __DIR__ . '/security.php';
 
-// 1. Database Connection
+// 1. Connection
 if (!isset($db) && !isset($pdo)) {
     try {
         $db = new PDO('sqlite:' . __DIR__ . '/database.sqlite');
@@ -17,51 +22,46 @@ if (!isset($db) && !isset($pdo)) {
     $db = $db ?? $pdo;
 }
 
-// 2. Safe Schema Alignment (Ensures legacy databases don't throw errors)
+// 2. Safely patch database schema for existing old databases
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER DEFAULT 1,
         title TEXT,
         content TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
-    $cols = array_column($db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC), 'name');
-    if (!in_array('updated_at', $cols)) {
-        $db->exec("ALTER TABLE notes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP");
+    $tableInfo = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC);
+    $columns = array_column($tableInfo, 'name');
+
+    if (!in_array('updated_at', $columns)) {
+        @$db->exec("ALTER TABLE notes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP");
     }
-    if (!in_array('user_id', $cols)) {
-        $db->exec("ALTER TABLE notes ADD COLUMN user_id INTEGER DEFAULT 1");
+    if (!in_array('user_id', $columns)) {
+        @$db->exec("ALTER TABLE notes ADD COLUMN user_id INTEGER DEFAULT 1");
     }
-} catch (PDOException $e) {
-    // Schema up to date
+} catch (Exception $e) {
+    // Schema patching fail-safe
 }
 
-// 3. Authentication & Timeout Guard
+// 3. Re-verify column existence to guarantee safe queries
+$tableInfo = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC);
+$existingColumns = array_column($tableInfo, 'name');
+$hasUpdatedAt = in_array('updated_at', $existingColumns);
+
+// 4. Session Guards
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
-$max_idle_seconds = 900;
-if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $max_idle_seconds)) {
-    session_unset();
-    session_destroy();
-    header("Location: login.php?expired=1");
-    exit;
-}
-$_SESSION['last_activity'] = time();
-
 $user_id = $_SESSION['user_id'];
-$status_msg = "";
-
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 4. Handle Save, Edit & Delete Operations
+// 5. Handle Form Submissions (Create, Edit, Delete)
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         die("Security token validation failed.");
@@ -82,11 +82,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $title = trim($_POST['title'] ?? '');
         $content = trim($_POST['content'] ?? '');
 
-        if ($note_id > 0 && (!empty($title) || !empty($content))) {
-            $stmt = $db->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-            $stmt->execute([$title, $content, $note_id]);
-            header("Location: index.php");
-            exit;
+        if ($note_id > 0) {
+            try {
+                if ($hasUpdatedAt) {
+                    $stmt = $db->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+                } else {
+                    $stmt = $db->prepare("UPDATE notes SET title = ?, content = ? WHERE id = ?");
+                }
+                $stmt->execute([$title, $content, $note_id]);
+                header("Location: index.php");
+                exit;
+            } catch (PDOException $e) {
+                die("Failed to update note: " . $e->getMessage());
+            }
         }
     } else {
         $title = trim($_POST['title'] ?? '');
@@ -101,16 +109,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// 5. Query Notes (Loads BOTH current user notes and legacy unassigned notes)
+// 6. Fetch Notes
 try {
-    $stmt = $db->prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY id DESC");
+    $stmt = $db->prepare("SELECT * FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY id DESC");
     $stmt->execute([$user_id]);
     $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    // Fallback query if updated_at column fails on an old SQLite engine
-    $stmt = $db->prepare("SELECT id, title, content, created_at FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY id DESC");
-    $stmt->execute([$user_id]);
-    $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    die("Failed to fetch notes: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -199,7 +204,7 @@ try {
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
                         <div style="display: flex; gap: 6px;">
-                            <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'])), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
+                            <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'] ?? '')), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
 
                             <form method="POST" action="index.php" onsubmit="return confirm('Delete this note?');" style="margin: 0;">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
