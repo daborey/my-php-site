@@ -187,6 +187,18 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Dashboard & Notes</title>
+    <script>
+        function openEditModal(id, title, content) {
+            document.getElementById('edit_note_id').value = id;
+            document.getElementById('edit_title').value = title;
+            document.getElementById('edit_content').value = content;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+    </script>
     <style>
         body {
             font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
@@ -485,96 +497,75 @@ try {
                                 <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
                             </form>
                         </div>
+                        <!-- NEW DELETE BUTTON END -->
 
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-                        <input type="hidden" name="action" value="delete">
-                        <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
-                        <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
-                        </form>
-                        <div class="note-date">
-                            <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
-                        </div>
                     </div>
-                    <!-- NEW DELETE BUTTON END -->
-
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-
-    <script>
-        function updateKhmerClock() {
-            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-
-            function toKhmerNum(num) {
-                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-            }
-
-            const now = new Date();
-
-            let rawHours = now.getHours();
-            const rawMinutes = now.getMinutes();
-            const rawSeconds = now.getSeconds();
-
-            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-            rawHours = rawHours % 12;
-            rawHours = rawHours ? rawHours : 12;
-
-            document.getElementById('hours').innerText = toKhmerNum(rawHours);
-            document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
-            document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
-            document.getElementById('ampm').innerText = ampmKhmer;
-
-            const dayName = khmerDays[now.getDay()];
-            const dayNum = toKhmerNum(now.getDate());
-            const monthName = khmerMonths[now.getMonth()];
-            const yearNum = now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-
-            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + dayName;
-            document.getElementById('khmer-date').innerText = dayNum + ' ' + monthName + ' ' + yearNum;
-        }
-
-        updateKhmerClock();
-        setInterval(updateKhmerClock, 1000);
-    </script>
-    <!-- Edit Note Modal -->
-    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
-        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
-            <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
-            <form method="POST" action="/daboreytextnote/index.php">
-                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-                <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="note_id" id="edit_note_id">
-
-                <div style="margin-bottom: 12px;">
-                    <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
+                <?php endforeach; ?>
+            <?php endif; ?>
                 </div>
 
-                <div style="margin-bottom: 12px;">
-                    <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
+                <script>
+                    function updateKhmerClock() {
+                        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+                        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+                        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+
+                        function toKhmerNum(num) {
+                            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+                        }
+
+                        const now = new Date();
+
+                        let rawHours = now.getHours();
+                        const rawMinutes = now.getMinutes();
+                        const rawSeconds = now.getSeconds();
+
+                        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+                        rawHours = rawHours % 12;
+                        rawHours = rawHours ? rawHours : 12;
+
+                        document.getElementById('hours').innerText = toKhmerNum(rawHours);
+                        document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
+                        document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
+                        document.getElementById('ampm').innerText = ampmKhmer;
+
+                        const dayName = khmerDays[now.getDay()];
+                        const dayNum = toKhmerNum(now.getDate());
+                        const monthName = khmerMonths[now.getMonth()];
+                        const yearNum = now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+
+                        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + dayName;
+                        document.getElementById('khmer-date').innerText = dayNum + ' ' + monthName + ' ' + yearNum;
+                    }
+
+                    updateKhmerClock();
+                    setInterval(updateKhmerClock, 1000);
+                </script>
+                <!-- Edit Note Modal -->
+                <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
+                    <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
+                        <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
+                        <form method="POST" action="/daboreytextnote/index.php">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                            <input type="hidden" name="action" value="edit">
+                            <input type="hidden" name="note_id" id="edit_note_id">
+
+                            <div style="margin-bottom: 12px;">
+                                <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
+                            </div>
+
+                            <div style="margin-bottom: 12px;">
+                                <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                                <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                                <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
 
-                <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                    <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
-                    <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <script>
-        function openEditModal(id, title, content) {
-            document.getElementById('edit_note_id').value = id;
-            document.getElementById('edit_title').value = title;
-            document.getElementById('edit_content').value = content;
-            document.getElementById('editModal').style.display = 'flex';
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
-    </script>
 </body>
 
 </html>
