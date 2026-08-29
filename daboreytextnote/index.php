@@ -1,22 +1,12 @@
 <?php
-// 1. Session Setup
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+if (session_status() === PHP_SESSION_NONE) session_start();
 
-// 2. Load Core Configuration & Security
-if (file_exists(__DIR__ . '/config.php')) {
-    require_once __DIR__ . '/config.php';
-}
-if (file_exists(__DIR__ . '/security.php')) {
-    require_once __DIR__ . '/security.php';
-}
+if (file_exists(__DIR__ . '/config.php')) require_once __DIR__ . '/config.php';
+if (file_exists(__DIR__ . '/security.php')) require_once __DIR__ . '/security.php';
 
-// 3. Database Connection (SQLite PDO)
+// 1. Database Connection
 if (!isset($db) && !isset($pdo)) {
     try {
-        // IMPORTANT: If your old database was named something else (like notes.db or db.sqlite),
-        // change 'database.sqlite' below to match your actual file name!
         $db = new PDO('sqlite:' . __DIR__ . '/database.sqlite');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
@@ -27,64 +17,36 @@ if (!isset($db) && !isset($pdo)) {
     $db = $db ?? $pdo;
 }
 
-// Ensure necessary SQLite tables exist and upgrade old tables
+// 2. Safe Schema Alignment (Ensures legacy databases don't throw errors)
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
+        user_id INTEGER DEFAULT 1,
         title TEXT,
         content TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
-    $db->exec("CREATE TABLE IF NOT EXISTS system_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        event_type TEXT,
-        ip_address TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )");
-
-    // Auto-upgrade older databases missing these columns
-    $columns = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_COLUMN, 1);
-    if (!in_array('updated_at', $columns)) {
+    $cols = array_column($db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+    if (!in_array('updated_at', $cols)) {
         $db->exec("ALTER TABLE notes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP");
     }
-    if (!in_array('user_id', $columns)) {
-        // If the old table didn't have user_id, assign all old notes to the current user
-        $current_user = $_SESSION['user_id'] ?? 1;
-        $db->exec("ALTER TABLE notes ADD COLUMN user_id INTEGER DEFAULT " . (int)$current_user);
+    if (!in_array('user_id', $cols)) {
+        $db->exec("ALTER TABLE notes ADD COLUMN user_id INTEGER DEFAULT 1");
     }
 } catch (PDOException $e) {
-    // Schema aligned
+    // Schema up to date
 }
 
-// Logging Helper
-function log_sqlite_event($db, $username, $event_type)
-{
-    try {
-        $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-        if (strpos($ip_address, ',') !== false) {
-            $ip_address = trim(explode(',', $ip_address)[0]);
-        }
-        $stmt = $db->prepare("INSERT INTO system_logs (username, event_type, ip_address) VALUES (?, ?, ?)");
-        $stmt->execute([$username, $event_type, $ip_address]);
-    } catch (Exception $e) {
-        error_log("Logging exception: " . $e->getMessage());
-    }
-}
-
-// 4. Enforce Authentication Guard
+// 3. Authentication & Timeout Guard
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
 }
 
-// 5. Session Timeout Check
 $max_idle_seconds = 900;
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $max_idle_seconds)) {
-    log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'SESSION_TIMEOUT_EXPIRED');
     session_unset();
     session_destroy();
     header("Location: login.php?expired=1");
@@ -99,82 +61,60 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 6. Handle Form Submissions (Create, Edit & Delete)
+// 4. Handle Save, Edit & Delete Operations
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'CSRF_VALIDATION_FAILURE');
-        die("Security token validation failed. Please refresh the page.");
+        die("Security token validation failed.");
     }
 
     $action = $_POST['action'] ?? 'create';
 
-    // Handle Note Deletion
     if ($action === 'delete') {
         $note_id = (int)($_POST['note_id'] ?? 0);
         if ($note_id > 0) {
-            try {
-                $stmt = $db->prepare("DELETE FROM notes WHERE id = ? AND user_id = ?");
-                $stmt->execute([$note_id, $user_id]);
-                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_DELETED');
-                header("Location: index.php");
-                exit;
-            } catch (PDOException $e) {
-                $status_msg = "Error deleting note: " . $e->getMessage();
-            }
+            $stmt = $db->prepare("DELETE FROM notes WHERE id = ?");
+            $stmt->execute([$note_id]);
+            header("Location: index.php");
+            exit;
         }
-    }
-    // Handle Note Editing
-    elseif ($action === 'edit') {
+    } elseif ($action === 'edit') {
         $note_id = (int)($_POST['note_id'] ?? 0);
         $title = trim($_POST['title'] ?? '');
         $content = trim($_POST['content'] ?? '');
 
         if ($note_id > 0 && (!empty($title) || !empty($content))) {
-            try {
-                $stmt = $db->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
-                $stmt->execute([$title, $content, $note_id, $user_id]);
-                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_EDITED');
-                header("Location: index.php");
-                exit;
-            } catch (PDOException $e) {
-                $status_msg = "Error updating note: " . $e->getMessage();
-            }
+            $stmt = $db->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+            $stmt->execute([$title, $content, $note_id]);
+            header("Location: index.php");
+            exit;
         }
-    }
-    // Handle Note Creation
-    else {
+    } else {
         $title = trim($_POST['title'] ?? '');
         $content = trim($_POST['content'] ?? '');
 
         if (!empty($title) || !empty($content)) {
-            try {
-                $stmt = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
-                if ($stmt->execute([$user_id, $title, $content])) {
-                    log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_CREATED');
-                    header("Location: index.php");
-                    exit;
-                }
-            } catch (PDOException $e) {
-                $status_msg = "Error saving note: " . $e->getMessage();
-            }
+            $stmt = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
+            $stmt->execute([$user_id, $title, $content]);
+            header("Location: index.php");
+            exit;
         }
     }
 }
 
-// 7. Fetch User Notes
-$notes = [];
+// 5. Query Notes (Loads BOTH current user notes and legacy unassigned notes)
 try {
-    $stmt = $db->prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE user_id = ? ORDER BY id DESC");
+    $stmt = $db->prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY id DESC");
     $stmt->execute([$user_id]);
     $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $notes = [];
-    $status_msg = "Error loading notes: " . $e->getMessage();
+    // Fallback query if updated_at column fails on an old SQLite engine
+    $stmt = $db->prepare("SELECT id, title, content, created_at FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY id DESC");
+    $stmt->execute([$user_id]);
+    $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
 <html lang="km">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -186,7 +126,6 @@ try {
             document.getElementById('edit_content').value = content;
             document.getElementById('editModal').style.display = 'flex';
         }
-
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
         }
@@ -197,7 +136,6 @@ try {
         .header-title-zone h1 { font-size: 24px; color: #38bdf8; margin: 0 0 5px 0; }
         .user-info { font-size: 14px; color: #94a3b8; }
         .btn-logout { padding: 8px 16px; background: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 15px; }
-        .btn-logout:hover { background: #dc2626; }
         .clock-container { background-color: #090a0f; padding: 10px 15px; border-radius: 8px; border: 1px solid #383121; display: grid; grid-template-columns: repeat(4, 70px); gap: 6px; text-align: center; }
         .clock-cell { background-color: #161922; padding: 6px 4px; border-radius: 4px; border: 1px solid #2d2618; }
         .cell-label { font-size: 10px; color: #d1b477; margin-bottom: 2px; display: block; }
@@ -208,7 +146,7 @@ try {
         .note-creator { background: #1e293b; width: 100%; max-width: 500px; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
         .note-creator input, .note-creator textarea { width: 100%; background: transparent; border: none; color: #f8fafc; outline: none; box-sizing: border-box; }
         .note-creator input { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
-        .note-creator textarea { font-size: 14px; min-height: 80px; resize: none;}
+        .note-creator textarea { font-size: 14px; min-height: 80px; resize: none; }
         .note-creator .actions { display: flex; justify-content: flex-end; margin-top: 10px; }
         .note-creator button { background: #0284c7; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; max-width: 1200px; margin: 0 auto; }
@@ -216,10 +154,8 @@ try {
         .note-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin: 0 0 8px 0; }
         .note-content { font-size: 14px; color: #cbd5e1; white-space: pre-wrap; margin: 0 0 12px 0; flex-grow: 1; }
         .note-date { font-size: 11px; color: #64748b; text-align: right; }
-        .status-error { text-align: center; color: #ef4444; font-weight: bold; margin-bottom: 15px; padding: 10px; background: #450a0a; border-radius: 4px; }
     </style>
 </head>
-
 <body>
 
     <header>
@@ -239,10 +175,6 @@ try {
             <div class="date-cell"><span id="khmer-day" class="day-highlight">---</span><span id="khmer-date">00 --- 0000</span></div>
         </div>
     </header>
-
-    <?php if (!empty($status_msg)) : ?>
-        <div class="status-error"><?php echo htmlspecialchars($status_msg); ?></div>
-    <?php endif; ?>
 
     <div class="note-creator-container">
         <form class="note-creator" method="POST" action="index.php">
@@ -269,7 +201,7 @@ try {
                         <div style="display: flex; gap: 6px;">
                             <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'])), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
 
-                            <form method="POST" action="index.php" onsubmit="return confirm('Are you sure you want to delete this note?');" style="margin: 0;">
+                            <form method="POST" action="index.php" onsubmit="return confirm('Delete this note?');" style="margin: 0;">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
@@ -278,11 +210,7 @@ try {
                         </div>
 
                         <div class="note-date">
-                            <?php if (!empty($note['updated_at']) && $note['updated_at'] !== $note['created_at']) : ?>
-                                <span style="color: #38bdf8;">Edited</span>
-                            <?php else : ?>
-                                <?php echo htmlspecialchars(date("d M Y", strtotime($note['created_at']))); ?>
-                            <?php endif; ?>
+                            <?php echo htmlspecialchars(date("d M Y", strtotime($note['created_at'] ?? 'now'))); ?>
                         </div>
                     </div>
                 </div>
@@ -292,7 +220,7 @@ try {
         <?php endif; ?>
     </div>
 
-    <!-- Edit Note Modal -->
+    <!-- Edit Modal -->
     <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
         <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
             <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
@@ -325,14 +253,11 @@ try {
             function toKhmerNum(num) { return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join(''); }
             const now = new Date();
             let rawHours = now.getHours();
-            const rawMinutes = now.getMinutes();
-            const rawSeconds = now.getSeconds();
             const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-            rawHours = rawHours % 12;
-            rawHours = rawHours ? rawHours : 12;
+            rawHours = rawHours % 12; rawHours = rawHours ? rawHours : 12;
             document.getElementById('hours').innerText = toKhmerNum(rawHours);
-            document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
-            document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
+            document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
+            document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
             document.getElementById('ampm').innerText = ampmKhmer;
             document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
             document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
