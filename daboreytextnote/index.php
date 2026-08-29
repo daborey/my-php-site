@@ -47,7 +47,8 @@ try {
 }
 
 // Logging Helper
-function log_sqlite_event($db, $username, $event_type) {
+function log_sqlite_event($db, $username, $event_type)
+{
     try {
         $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
         if (strpos($ip_address, ',') !== false) {
@@ -107,7 +108,27 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $status_msg = "Error deleting note: " . $e->getMessage();
             }
         }
-    } 
+    }
+
+    // Handle Note Editing
+    elseif ($action === 'edit') {
+        $note_id = (int)($_POST['note_id'] ?? 0);
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+
+        if ($note_id > 0 && (!empty($title) || !empty($content))) {
+            try {
+                $stmt = $db->prepare("UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
+                $stmt->execute([$title, $content, $note_id, $user_id]);
+                log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_EDITED');
+                header("Location: /daboreytextnote/index.php");
+                exit;
+            } catch (PDOException $e) {
+                $status_msg = "Error updating note: " . $e->getMessage();
+            }
+        }
+    }
+
     // Handle Note Creation
     else {
         $title = trim($_POST['title'] ?? '');
@@ -161,45 +182,59 @@ try {
 ?>
 <!DOCTYPE html>
 <html lang="km">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Dashboard & Notes</title>
     <style>
-        body { 
-            font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif; 
-            background-color: #0f172a; 
-            color: #f8fafc; 
-            margin: 0; 
-            padding: 20px; 
+        body {
+            font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 20px;
         }
-        
-        header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 15px 40px; 
-            background: #1e293b; 
-            border-bottom: 1px solid #334155; 
-            border-radius: 8px; 
-            margin-bottom: 30px; 
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            border-radius: 8px;
+            margin-bottom: 30px;
             flex-wrap: wrap;
             gap: 20px;
         }
-        .header-title-zone h1 { font-size: 24px; color: #38bdf8; margin: 0 0 5px 0; }
-        .user-info { font-size: 14px; color: #94a3b8; }
-        .btn-logout { 
-            padding: 8px 16px; 
-            background: #ef4444; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 4px; 
-            font-weight: bold; 
-            font-size: 14px; 
-            margin-left: 15px; 
-            transition: background 0.2s; 
+
+        .header-title-zone h1 {
+            font-size: 24px;
+            color: #38bdf8;
+            margin: 0 0 5px 0;
         }
-        .btn-logout:hover { background: #dc2626; }
+
+        .user-info {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-left: 15px;
+            transition: background 0.2s;
+        }
+
+        .btn-logout:hover {
+            background: #dc2626;
+        }
 
         .clock-container {
             background-color: #090a0f;
@@ -212,12 +247,14 @@ try {
             gap: 6px;
             text-align: center;
         }
+
         .clock-cell {
             background-color: #161922;
             padding: 6px 4px;
             border-radius: 4px;
             border: 1px solid #2d2618;
         }
+
         .cell-label {
             font-size: 10px;
             font-weight: 500;
@@ -225,14 +262,19 @@ try {
             margin-bottom: 2px;
             display: block;
         }
+
         .cell-value {
             font-size: 20px;
             font-weight: bold;
-            color: #ffb700; 
+            color: #ffb700;
             text-shadow: 0 0 8px rgba(255, 183, 0, 0.5);
             line-height: 1.1;
         }
-        #ampm { font-size: 16px; }
+
+        #ampm {
+            font-size: 16px;
+        }
+
         .date-cell {
             grid-column: span 4;
             padding: 4px;
@@ -245,6 +287,7 @@ try {
             background: transparent;
             border: none;
         }
+
         .day-highlight {
             color: #ffb700;
             font-weight: bold;
@@ -253,25 +296,124 @@ try {
             border-radius: 3px;
         }
 
-        .note-creator-container { display: flex; justify-content: center; margin-bottom: 40px; }
-        .note-creator { background: #1e293b; width: 100%; max-width: 500px; padding: 15px; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        .note-creator input, .note-creator textarea { width: 100%; background: transparent; border: none; color: #f8fafc; outline: none; font-family: inherit; resize: none; box-sizing: border-box; }
-        .note-creator input { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
-        .note-creator textarea { font-size: 14px; min-height: 80px; }
-        .note-creator .actions { display: flex; justify-content: flex-end; margin-top: 10px; }
-        .note-creator button { background: #0284c7; color: white; border: none; padding: 6px 16px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-        .note-creator button:hover { background: #0369a1; }
+        .note-creator-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+        }
 
-        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; max-width: 1200px; margin: 0 auto; }
-        .note-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; word-wrap: break-word; }
-        .note-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin: 0 0 8px 0; }
-        .note-content { font-size: 14px; color: #cbd5e1; white-space: pre-wrap; margin: 0 0 12px 0; flex-grow: 1; }
-        .note-date { font-size: 11px; color: #64748b; text-align: right; }
-        
-        .no-notes { text-align: center; color: #64748b; font-size: 16px; width: 100%; grid-column: 1 / -1; margin-top: 40px; }
-        .status-error { text-align: center; color: #ef4444; margin-bottom: 15px; }
+        .note-creator {
+            background: #1e293b;
+            width: 100%;
+            max-width: 500px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .note-creator input,
+        .note-creator textarea {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            outline: none;
+            font-family: inherit;
+            resize: none;
+            box-sizing: border-box;
+        }
+
+        .note-creator input {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .note-creator textarea {
+            font-size: 14px;
+            min-height: 80px;
+        }
+
+        .note-creator .actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+        }
+
+        .note-creator button {
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .note-creator button:hover {
+            background: #0369a1;
+        }
+
+        .notes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .note-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            word-wrap: break-word;
+        }
+
+        .note-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin: 0 0 8px 0;
+        }
+
+        .note-content {
+            font-size: 14px;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            margin: 0 0 12px 0;
+            flex-grow: 1;
+        }
+
+        .note-date {
+            font-size: 11px;
+            color: #64748b;
+            text-align: right;
+        }
+
+        .no-notes {
+            text-align: center;
+            color: #64748b;
+            font-size: 16px;
+            width: 100%;
+            grid-column: 1 / -1;
+            margin-top: 40px;
+        }
+
+        .status-error {
+            text-align: center;
+            color: #ef4444;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -307,7 +449,7 @@ try {
         </div>
     </header>
 
-    <?php if (!empty($status_msg)): ?>
+    <?php if (!empty($status_msg)) : ?>
         <div class="status-error"><?php echo htmlspecialchars($status_msg); ?></div>
     <?php endif; ?>
 
@@ -323,21 +465,31 @@ try {
     </div>
 
     <div class="notes-grid">
-        <?php if (!empty($notes)): ?>
-            <?php foreach ($notes as $note): ?>
+        <?php if (!empty($notes)) : ?>
+            <?php foreach ($notes as $note) : ?>
                 <div class="note-card">
                     <div>
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
-                    
+
                     <!-- NEW DELETE BUTTON START -->
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
-                        <form method="POST" action="/daboreytextnote/index.php" onsubmit="return confirm('Are you sure you want to delete this note?');" style="margin: 0;">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-                            <input type="hidden" name="action" value="delete">
-                            <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
-                            <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
+                        <div style="display: flex; gap: 6px;">
+                            <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'])), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
+
+                            <form method="POST" action="/daboreytextnote/index.php" onsubmit="return confirm('Are you sure you want to delete this note?');" style="margin: 0;">
+                                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                                <input type="hidden" name="action" value="delete">
+                                <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
+                                <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
+                            </form>
+                        </div>
+
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="note_id" value="<?php echo (int)$note['id']; ?>">
+                        <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
                         </form>
                         <div class="note-date">
                             <?php echo htmlspecialchars(date("d M Y, h:i A", strtotime($note['created_at']))); ?>
@@ -368,7 +520,7 @@ try {
 
             const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
             rawHours = rawHours % 12;
-            rawHours = rawHours ? rawHours : 12; 
+            rawHours = rawHours ? rawHours : 12;
 
             document.getElementById('hours').innerText = toKhmerNum(rawHours);
             document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
@@ -387,5 +539,42 @@ try {
         updateKhmerClock();
         setInterval(updateKhmerClock, 1000);
     </script>
+    <!-- Edit Note Modal -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
+            <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
+            <form method="POST" action="/daboreytextnote/index.php">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="note_id" id="edit_note_id">
+
+                <div style="margin-bottom: 12px;">
+                    <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        function openEditModal(id, title, content) {
+            document.getElementById('edit_note_id').value = id;
+            document.getElementById('edit_title').value = title;
+            document.getElementById('edit_content').value = content;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+    </script>
 </body>
+
 </html>
