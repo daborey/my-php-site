@@ -32,8 +32,15 @@ try {
         user_id INTEGER NOT NULL,
         title TEXT,
         content TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
+
+    // Auto-add updated_at column if database was created earlier without it
+    $columns = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_COLUMN, 1);
+    if (!in_array('updated_at', $columns)) {
+        $db->exec("ALTER TABLE notes ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP");
+    }
 
     $db->exec("CREATE TABLE IF NOT EXISTS system_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +50,7 @@ try {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 } catch (PDOException $e) {
-    // Database initialized
+    // Database schema aligned
 }
 
 // Logging Helper
@@ -85,7 +92,7 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 6. Handle Form Submissions (Create & Delete)
+// 6. Handle Form Submissions (Create, Edit & Delete)
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'CSRF_VALIDATION_FAILURE');
@@ -149,31 +156,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 }
 
-// Handle Form Submissions (Note Deletion)
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'delete') {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'CSRF_VALIDATION_FAILURE');
-        die("Security token validation failed.");
-    }
-
-    $note_id = (int)($_POST['note_id'] ?? 0);
-    if ($note_id > 0) {
-        try {
-            $stmt = $db->prepare("SELECT id, title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC");
-            $stmt->execute([$note_id, $user_id]);
-            log_sqlite_event($db, $_SESSION['username'] ?? 'UNKNOWN', 'NOTE_DELETED_SUCCESSFULLY');
-            header("Location: /daboreytextnote/index.php");
-            exit;
-        } catch (PDOException $e) {
-            $status_msg = "Error deleting note: " . $e->getMessage();
-        }
-    }
-}
-
 // 7. Fetch User Notes
 $notes = [];
 try {
-    $stmt = $db->prepare("SELECT id, title, content, created_at FROM notes WHERE user_id = ? ORDER BY id DESC");
+    $stmt = $db->prepare("SELECT id, title, content, created_at, updated_at FROM notes WHERE user_id = ? ORDER BY id DESC");
     $stmt->execute([$user_id]);
     $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -409,15 +395,6 @@ try {
             text-align: right;
         }
 
-        .no-notes {
-            text-align: center;
-            color: #64748b;
-            font-size: 16px;
-            width: 100%;
-            grid-column: 1 / -1;
-            margin-top: 40px;
-        }
-
         .status-error {
             text-align: center;
             color: #ef4444;
@@ -468,6 +445,7 @@ try {
     <div class="note-creator-container">
         <form class="note-creator" method="POST" action="/daboreytextnote/index.php">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+            <input type="hidden" name="action" value="create">
             <input type="text" name="title" placeholder="ចំណងជើង (Title)..." autocomplete="off" required>
             <textarea name="content" placeholder="សរសេរកំណត់ចំណាំទីនេះ (Take a note...)" required></textarea>
             <div class="actions">
@@ -485,7 +463,6 @@ try {
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
 
-                    <!-- NEW DELETE BUTTON START -->
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
                         <div style="display: flex; gap: 6px;">
                             <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title']), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'])), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
@@ -497,75 +474,82 @@ try {
                                 <button type="submit" style="background: #ef4444; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Delete</button>
                             </form>
                         </div>
-                        <!-- NEW DELETE BUTTON END -->
 
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-                </div>
-
-                <script>
-                    function updateKhmerClock() {
-                        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-                        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-                        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-
-                        function toKhmerNum(num) {
-                            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-                        }
-
-                        const now = new Date();
-
-                        let rawHours = now.getHours();
-                        const rawMinutes = now.getMinutes();
-                        const rawSeconds = now.getSeconds();
-
-                        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-                        rawHours = rawHours % 12;
-                        rawHours = rawHours ? rawHours : 12;
-
-                        document.getElementById('hours').innerText = toKhmerNum(rawHours);
-                        document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
-                        document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
-                        document.getElementById('ampm').innerText = ampmKhmer;
-
-                        const dayName = khmerDays[now.getDay()];
-                        const dayNum = toKhmerNum(now.getDate());
-                        const monthName = khmerMonths[now.getMonth()];
-                        const yearNum = now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-
-                        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + dayName;
-                        document.getElementById('khmer-date').innerText = dayNum + ' ' + monthName + ' ' + yearNum;
-                    }
-
-                    updateKhmerClock();
-                    setInterval(updateKhmerClock, 1000);
-                </script>
-                <!-- Edit Note Modal -->
-                <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
-                    <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
-                        <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
-                        <form method="POST" action="/daboreytextnote/index.php">
-                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
-                            <input type="hidden" name="action" value="edit">
-                            <input type="hidden" name="note_id" id="edit_note_id">
-
-                            <div style="margin-bottom: 12px;">
-                                <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
-                            </div>
-
-                            <div style="margin-bottom: 12px;">
-                                <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
-                            </div>
-
-                            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                                <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
-                                <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
-                            </div>
-                        </form>
+                        <div class="note-date">
+                            <?php if (!empty($note['updated_at']) && $note['updated_at'] !== $note['created_at']) : ?>
+                                <span style="color: #38bdf8;">Edited</span>
+                            <?php else : ?>
+                                <?php echo htmlspecialchars(date("d M Y", strtotime($note['created_at']))); ?>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 
+    <!-- Edit Note Modal -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
+            <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
+            <form method="POST" action="/daboreytextnote/index.php">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="note_id" id="edit_note_id">
+
+                <div style="margin-bottom: 12px;">
+                    <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function updateKhmerClock() {
+            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+
+            function toKhmerNum(num) {
+                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+            }
+
+            const now = new Date();
+
+            let rawHours = now.getHours();
+            const rawMinutes = now.getMinutes();
+            const rawSeconds = now.getSeconds();
+
+            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+            rawHours = rawHours % 12;
+            rawHours = rawHours ? rawHours : 12;
+
+            document.getElementById('hours').innerText = toKhmerNum(rawHours);
+            document.getElementById('minutes').innerText = toKhmerNum(rawMinutes);
+            document.getElementById('seconds').innerText = toKhmerNum(rawSeconds);
+            document.getElementById('ampm').innerText = ampmKhmer;
+
+            const dayName = khmerDays[now.getDay()];
+            const dayNum = toKhmerNum(now.getDate());
+            const monthName = khmerMonths[now.getMonth()];
+            const yearNum = now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+
+            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + dayName;
+            document.getElementById('khmer-date').innerText = dayNum + ' ' + monthName + ' ' + yearNum;
+        }
+
+        updateKhmerClock();
+        setInterval(updateKhmerClock, 1000);
+    </script>
 </body>
 
 </html>
