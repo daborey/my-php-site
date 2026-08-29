@@ -168,7 +168,7 @@ try {
             <h1>Secure Notes Portal</h1>
             <div class="user-info">
                 Authenticated Entity: <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong>
-                <a href="logout.php" class="btn-logout">Sign Out</a>
+                <a href="logout.php" class="btn-logout">Sign Outt</a>
             </div>
         </div>
 
