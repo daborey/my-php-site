@@ -27,7 +27,7 @@
         <li><a href="https://gemini.google.com/" target="_blank">Gemini ai</a></li>
         <li><a href="https://github.com/daborey?tab=repositories" target="_blank">Github daborey repositories</a></li>
         <li><a href="https://github.com/khmerdevelopercommunity?tab=repositories" target="_blank">Github khmerdevelopercommunity repositories</a></li>
-        
+        <li><a href="https://chat.deepseek.com/" target="_blank">Deepseek ai</a></li>
     </ol>
 </body>
 </html>
