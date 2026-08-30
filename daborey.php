@@ -26,6 +26,7 @@
         <li><a href="https://drive.google.com/drive/folders/1Ndpt-6mtKjKf4Eem8d25CWBjBBntNhyw" target="_blank">computer program</a></li>
         <li><a href="https://gemini.google.com/" target="_blank">Gemini ai</a></li>
         <li><a href="https://github.com/daborey?tab=repositories" target="_blank">Github daborey repositories</a></li>
+        <li><a href="https://github.com/khmerdevelopercommunity?tab=repositories" target="_blank">Github khmerdevelopercommunity repositories</a></li>
         
     </ol>
 </body>
