@@ -24,7 +24,8 @@
         <li><a href="https://daborey.github.io/appgalleryconvert/" target="_blank">app gallery convert</a></li>
         <li><a href="newuser.html" target="_blank">create a new user window</a></li>
         <li><a href="https://drive.google.com/drive/folders/1Ndpt-6mtKjKf4Eem8d25CWBjBBntNhyw" target="_blank">computer program</a></li>
-        <li><a href="https://play.google.com/store/apps/developer?id=Thomas+Apps+Hub&hl=en" target="_blank">hello2 all phone reset code (android)1</a></li>
+        <li><a href="gemini.google.com" target="_blank">Gemini ai</a></li>
+        
     </ol>
 </body>
 </html>
