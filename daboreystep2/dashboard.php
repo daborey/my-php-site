@@ -255,24 +255,177 @@ try {
         <div class="status-error"><?php echo sanitize($status_msg); ?></div>
     <?php endif; ?>
 
-    <!-- QR Code Image Upload Form -->
-    <div class="upload-card">
-        <h2>Upload Backup 2FA QR Code</h2>
-        <p style="color:#94a3b8; font-size:14px;">Upload your saved 2FA QR code image to parse and add its 6-digit TOTP key.</p>
-        
-        <div class="upload-zone" onclick="document.getElementById('qr-file').click();">
-            <span id="upload-label">Click or Drag & Drop QR Image Here</span>
-            <input type="file" id="qr-file" class="file-input" accept="image/*" onchange="processQRImage(this)">
+    <style>
+        .dual-column-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto 30px auto;
+        }
+        .feature-card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            text-align: center;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        #scanner-viewfinder {
+            width: 100%;
+            max-width: 320px;
+            height: 240px;
+            background: #0f172a;
+            border: 2px dashed #38bdf8;
+            border-radius: 8px;
+            margin: 15px auto;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        .scanner-overlay {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            border: 2px solid #4ade80;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            display: none;
+            pointer-events: none;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .btn-action {
+            width: 100%;
+            padding: 10px;
+            background: #0284c7;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-action:hover { background: #0369a1; }
+        .btn-stop {
+            background: #ef4444;
+            margin-top: 10px;
+        }
+        .btn-stop:hover { background: #dc2626; }
+    </style>
+
+    <!-- Dual-Column Feature Area -->
+    <div class="dual-column-container">
+        <!-- Left Column: Upload Backup 2FA Image -->
+        <div class="feature-card">
+            <h2 style="margin-top:0; color:#38bdf8; font-size:18px;">Upload Backup 2FA Image</h2>
+            <p style="color:#94a3b8; font-size:13px;">Select or drop a saved QR code screenshot to parse its secret key.</p>
+            
+            <div class="upload-zone" onclick="document.getElementById('qr-file').click();">
+                <span id="upload-label">Click or Drag & Drop QR Image Here</span>
+                <input type="file" id="qr-file" class="file-input" accept="image/*" onchange="processQRImage(this)">
+            </div>
+
+            <form id="save-account-form" method="POST" action="/daboreystep2/dashboard.php" style="display:none; margin-top:20px;">
+                <input type="hidden" name="action" value="add_account">
+                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                <input type="hidden" name="secret_key" id="extracted-secret">
+                <input type="text" name="account_label" id="extracted-label" placeholder="Account Name (e.g. Google, GitHub)" required class="form-input">
+                <button type="submit" class="btn-action">Save 2FA Account</button>
+            </form>
         </div>
 
-        <form id="save-account-form" method="POST" action="/daboreystep2/dashboard.php" style="display:none; margin-top:20px;">
-            <input type="hidden" name="action" value="add_account">
-            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-            <input type="hidden" name="secret_key" id="extracted-secret">
-            <input type="text" name="account_label" id="extracted-label" placeholder="Account Name (e.g. Google, GitHub)" required style="width:80%; padding:8px; background:#0f172a; border:1px solid #334155; color:white; border-radius:4px; margin-bottom:10px;">
-            <br>
-            <button type="submit" style="padding:8px 20px; background:#0284c7; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Save 2FA Account</button>
-        </form>
+        <!-- Right Column: Google Authenticator Workflow -->
+        <div class="feature-card">
+            <h2 style="margin-top:0; color:#38bdf8; font-size:18px;">Add 2-Step Verification</h2>
+            <p style="color:#94a3b8; font-size:13px; margin-bottom:15px;">Add account using Google Authenticator steps.</p>
+
+            <div class="tab-buttons">
+                <button type="button" class="tab-btn active" onclick="switchTab('camera')">📷 Scan QR Code</button>
+                <button type="button" class="tab-btn" onclick="switchTab('manual')">⌨️ Enter Setup Key</button>
+            </div>
+
+            <!-- Tab 1: Live Rear-Camera Scanner -->
+            <div id="tab-camera" class="tab-content active">
+                <div id="scanner-viewfinder">
+                    <span id="camera-placeholder" style="color:#64748b; font-size:13px;">Camera inactive</span>
+                    <video id="camera-feed" playsinline></video>
+                    <div id="scanner-overlay" class="scanner-overlay"></div>
+                </div>
+                <canvas id="qr-canvas" style="display:none;"></canvas>
+
+                <button id="btn-start-camera" type="button" class="btn-action" onclick="startCameraScanner()">Start Rear Camera</button>
+                <button id="btn-stop-camera" type="button" class="btn-action btn-stop" style="display:none;" onclick="stopCameraScanner()">Cancel / Turn Off Camera</button>
+
+                <form id="camera-save-form" method="POST" action="/daboreystep2/dashboard.php" style="display:none; margin-top:15px;">
+                    <input type="hidden" name="action" value="add_account">
+                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="secret_key" id="camera-extracted-secret">
+                    <input type="text" name="account_label" id="camera-extracted-label" placeholder="Account Name" required class="form-input">
+                    <button type="submit" class="btn-action">Save Scanned Account</button>
+                </form>
+            </div>
+
+            <!-- Tab 2: Manual Setup Key Form -->
+            <div id="tab-manual" class="tab-content">
+                <form method="POST" action="/daboreystep2/dashboard.php" style="margin-top:10px;">
+                    <input type="hidden" name="action" value="add_account">
+                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    
+                    <input type="text" name="account_label" placeholder="Account name (e.g. GitHub)" required class="form-input">
+                    <input type="text" name="secret_key" id="manual-secret-input" placeholder="Your key (Base32 secret)" required class="form-input" oninput="sanitizeManualKey(this)">
+                    
+                    <select class="form-input" disabled style="opacity:0.7;">
+                        <option selected>Type of key: Time-based (TOTP)</option>
+                    </select>
+
+                    <button type="submit" class="btn-action">Add Account</button>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- Live 2FA Tokens Grid -->
@@ -302,6 +455,141 @@ try {
 <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js"></script>
 
 <script>
+    // Tab Switcher Logic
+    function switchTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        if (tab === 'camera') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('tab-camera').classList.add('active');
+        } else {
+            stopCameraScanner();
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('tab-manual').classList.add('active');
+        }
+    }
+
+    // Manual Key Real-time Sanitizer
+    function sanitizeManualKey(input) {
+        input.value = input.value.replace(/[^A-Za-z2-7]/g, '').toUpperCase();
+    }
+
+    // Camera Hardware Variables
+    let mediaStream = null;
+    let animationFrameId = null;
+
+    // Start Live Rear Camera Scanner
+    async function startCameraScanner() {
+        const video = document.getElementById('camera-feed');
+        const placeholder = document.getElementById('camera-placeholder');
+        const overlay = document.getElementById('scanner-overlay');
+        const btnStart = document.getElementById('btn-start-camera');
+        const btnStop = document.getElementById('btn-stop-camera');
+
+        try {
+            // Strictly target environment/rear camera
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: "environment" } }
+            });
+
+            video.srcObject = mediaStream;
+            video.setAttribute("playsinline", true);
+            await video.play();
+
+            placeholder.style.display = "none";
+            video.style.display = "block";
+            overlay.style.display = "block";
+            btnStart.style.display = "none";
+            btnStop.style.display = "block";
+
+            scanCameraFrame();
+        } catch (err) {
+            alert("Camera Access Error: " + (err.message || "Unable to access rear camera. Ensure HTTPS is enabled and permissions are granted."));
+            stopCameraScanner();
+        }
+    }
+
+    // Continuous Frame Scanning via jsQR
+    function scanCameraFrame() {
+        const video = document.getElementById('camera-feed');
+        const canvas = document.getElementById('qr-canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code && code.data) {
+                // Key detected - process secret & release camera hardware
+                processCameraQRData(code.data.trim());
+                stopCameraScanner();
+                return;
+            }
+        }
+        animationFrameId = requestAnimationFrame(scanCameraFrame);
+    }
+
+    // Hardware Release: Turn off Camera Stream
+    function stopCameraScanner() {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+
+        const video = document.getElementById('camera-feed');
+        const placeholder = document.getElementById('camera-placeholder');
+        const overlay = document.getElementById('scanner-overlay');
+        const btnStart = document.getElementById('btn-start-camera');
+        const btnStop = document.getElementById('btn-stop-camera');
+
+        if (video) video.style.display = "none";
+        if (placeholder) placeholder.style.display = "block";
+        if (overlay) overlay.style.display = "none";
+        if (btnStart) btnStart.style.display = "block";
+        if (btnStop) btnStop.style.display = "none";
+    }
+
+    // Process Camera Scan Result
+    function processCameraQRData(qrData) {
+        let secret = "";
+        let label = "Scanned Account";
+
+        if (qrData.startsWith("otpauth://")) {
+            try {
+                const url = new URL(qrData);
+                secret = url.searchParams.get("secret");
+                const pathParts = url.pathname.split('/');
+                if (pathParts.length > 1) {
+                    label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                }
+                if (url.searchParams.get("issuer")) {
+                    label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
+                }
+            } catch (e) {}
+        } else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
+            secret = qrData.replace(/\s+/g, '');
+        }
+
+        secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
+
+        if (secret.length >= 8) {
+            document.getElementById('camera-extracted-secret').value = secret;
+            document.getElementById('camera-extracted-label').value = label;
+            document.getElementById('camera-save-form').style.display = "block";
+        } else {
+            alert("QR scanned, but no valid Base32 TOTP key was detected.");
+        }
+    }
+
     // 1. Process and Parse Uploaded QR Code Image
     function processQRImage(input) {
         if (!input.files || !input.files[0]) return;
