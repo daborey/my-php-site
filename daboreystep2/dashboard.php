@@ -6,22 +6,26 @@
 require_once __DIR__ . '/config.php';
 
 // Functions & Security Helpers
-function sanitize($data) {
+function sanitize($data)
+{
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-function generate_csrf_token() {
+function generate_csrf_token()
+{
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
     return $_SESSION['csrf_token'];
 }
 
-function verify_csrf_token($token) {
+function verify_csrf_token($token)
+{
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
-function log_sqlite_event($db, $username, $event_type) {
+function log_sqlite_event($db, $username, $event_type)
+{
     try {
         $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
         if (strpos($ip_address, ',') !== false) {
@@ -113,6 +117,7 @@ try {
 ?>
 <!DOCTYPE html>
 <html lang="km">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -122,31 +127,67 @@ try {
     <!-- OTPAuth Library for client-side live 6-digit TOTP code calculation -->
     <script src="https://cdn.jsdelivr.net/npm/otpauth@9.1.4/dist/otpauth.umd.min.js"></script>
     <style>
-        body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            background-color: #0f172a; 
-            color: #f8fafc; 
-            margin: 0; 
-            padding: 20px; 
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 20px;
         }
-        header { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 15px 40px; 
-            background: #1e293b; 
-            border-bottom: 1px solid #334155; 
-            border-radius: 8px; 
-            margin-bottom: 30px; 
-            flex-wrap: wrap; 
-            gap: 20px; 
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
         }
-        .header-title-zone h1 { font-size: 24px; color: #38bdf8; margin: 0 0 5px 0; }
-        .user-info { font-size: 14px; color: #94a3b8; }
-        .btn-profile { padding: 8px 16px; background: #334155; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 15px; }
-        .btn-profile:hover { background: #475569; }
-        .btn-logout { padding: 8px 16px; background: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; font-size: 14px; margin-left: 10px; }
-        .btn-logout:hover { background: #dc2626; }
+
+        .header-title-zone h1 {
+            font-size: 24px;
+            color: #38bdf8;
+            margin: 0 0 5px 0;
+        }
+
+        .user-info {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .btn-profile {
+            padding: 8px 16px;
+            background: #334155;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-left: 15px;
+        }
+
+        .btn-profile:hover {
+            background: #475569;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .btn-logout:hover {
+            background: #dc2626;
+        }
 
         .clock-container {
             background-color: #090a0f;
@@ -158,11 +199,38 @@ try {
             gap: 6px;
             text-align: center;
         }
-        .clock-cell { background-color: #161922; padding: 6px 4px; border-radius: 4px; border: 1px solid #2d2618; }
-        .cell-label { font-size: 10px; color: #d1b477; display: block; }
-        .cell-value { font-size: 20px; font-weight: bold; color: #ffb700; }
-        .date-cell { grid-column: span 4; font-size: 12px; color: #bdc5e1; display: flex; justify-content: space-around; }
-        .day-highlight { color: #ffb700; font-weight: bold; }
+
+        .clock-cell {
+            background-color: #161922;
+            padding: 6px 4px;
+            border-radius: 4px;
+            border: 1px solid #2d2618;
+        }
+
+        .cell-label {
+            font-size: 10px;
+            color: #d1b477;
+            display: block;
+        }
+
+        .cell-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ffb700;
+        }
+
+        .date-cell {
+            grid-column: span 4;
+            font-size: 12px;
+            color: #bdc5e1;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .day-highlight {
+            color: #ffb700;
+            font-weight: bold;
+        }
 
         .upload-card {
             background: #1e293b;
@@ -173,6 +241,7 @@ try {
             margin: 0 auto 30px auto;
             text-align: center;
         }
+
         .upload-zone {
             border: 2px dashed #38bdf8;
             padding: 20px;
@@ -181,8 +250,14 @@ try {
             margin-top: 15px;
             background: #0f172a;
         }
-        .upload-zone:hover { background: #1b283f; }
-        .file-input { display: none; }
+
+        .upload-zone:hover {
+            background: #1b283f;
+        }
+
+        .file-input {
+            display: none;
+        }
 
         .accounts-grid {
             display: grid;
@@ -191,6 +266,7 @@ try {
             max-width: 1200px;
             margin: 0 auto;
         }
+
         .account-card {
             background: #1e293b;
             border: 1px solid #334155;
@@ -198,7 +274,14 @@ try {
             padding: 20px;
             position: relative;
         }
-        .account-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin-bottom: 10px; }
+
+        .account-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin-bottom: 10px;
+        }
+
         .totp-code {
             font-size: 32px;
             font-weight: bold;
@@ -207,6 +290,7 @@ try {
             letter-spacing: 4px;
             margin: 10px 0;
         }
+
         .timer-bar {
             height: 4px;
             background: #0284c7;
@@ -214,6 +298,7 @@ try {
             border-radius: 2px;
             transition: width 1s linear;
         }
+
         .btn-delete {
             background: #ef4444;
             color: white;
@@ -224,9 +309,15 @@ try {
             font-size: 12px;
             float: right;
         }
-        .status-error { text-align: center; color: #ef4444; margin-bottom: 15px; }
+
+        .status-error {
+            text-align: center;
+            color: #ef4444;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -240,10 +331,18 @@ try {
         </div>
 
         <div class="clock-container">
-            <div class="clock-cell"><span class="cell-label">ម៉ោង</span><div id="hours" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">នាទី</span><div id="minutes" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">វិនាទី</span><div id="seconds" class="cell-value">00</div></div>
-            <div class="clock-cell"><span class="cell-label">ពេល</span><div id="ampm" class="cell-value">AM</div></div>
+            <div class="clock-cell"><span class="cell-label">ម៉ោង</span>
+                <div id="hours" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">នាទី</span>
+                <div id="minutes" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">វិនាទី</span>
+                <div id="seconds" class="cell-value">00</div>
+            </div>
+            <div class="clock-cell"><span class="cell-label">ពេល</span>
+                <div id="ampm" class="cell-value">AM</div>
+            </div>
             <div class="date-cell">
                 <span id="khmer-day" class="day-highlight">---</span>
                 <span id="khmer-date">00 --- 0000</span>
@@ -263,6 +362,7 @@ try {
             max-width: 1200px;
             margin: 0 auto 30px auto;
         }
+
         .feature-card {
             background: #1e293b;
             padding: 25px;
@@ -270,11 +370,13 @@ try {
             border: 1px solid #334155;
             text-align: center;
         }
+
         .tab-buttons {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
         }
+
         .tab-btn {
             flex: 1;
             padding: 10px;
@@ -286,17 +388,21 @@ try {
             font-weight: bold;
             font-size: 13px;
         }
+
         .tab-btn.active {
             background: #0284c7;
             color: #ffffff;
             border-color: #38bdf8;
         }
+
         .tab-content {
             display: none;
         }
+
         .tab-content.active {
             display: block;
         }
+
         #scanner-viewfinder {
             width: 100%;
             max-width: 320px;
@@ -311,12 +417,14 @@ try {
             align-items: center;
             justify-content: center;
         }
+
         #camera-feed {
             width: 100%;
             height: 100%;
             object-fit: cover;
             display: none;
         }
+
         .scanner-overlay {
             position: absolute;
             width: 160px;
@@ -327,6 +435,7 @@ try {
             display: none;
             pointer-events: none;
         }
+
         .form-input {
             width: 100%;
             padding: 10px;
@@ -338,6 +447,7 @@ try {
             box-sizing: border-box;
             font-size: 14px;
         }
+
         .btn-action {
             width: 100%;
             padding: 10px;
@@ -349,12 +459,19 @@ try {
             cursor: pointer;
             font-size: 14px;
         }
-        .btn-action:hover { background: #0369a1; }
+
+        .btn-action:hover {
+            background: #0369a1;
+        }
+
         .btn-stop {
             background: #ef4444;
             margin-top: 10px;
         }
-        .btn-stop:hover { background: #dc2626; }
+
+        .btn-stop:hover {
+            background: #dc2626;
+        }
     </style>
 
     <!-- Dual-Column Feature Area -->
@@ -363,7 +480,7 @@ try {
         <div class="feature-card">
             <h2 style="margin-top:0; color:#38bdf8; font-size:18px;">Upload Backup 2FA Image</h2>
             <p style="color:#94a3b8; font-size:13px;">Select or drop a saved QR code screenshot to parse its secret key.</p>
-            
+
             <div class="upload-zone" onclick="document.getElementById('qr-file').click();">
                 <span id="upload-label">Click or Drag & Drop QR Image Here</span>
                 <input type="file" id="qr-file" class="file-input" accept="image/*" onchange="processQRImage(this)">
@@ -378,7 +495,7 @@ try {
             </form>
         </div>
 
-        <!-- Right Column: Google Authenticator Workflow -->
+        <!-- REFACTORED RIGHT COLUMN: Google Authenticator Workflow -->
         <div class="feature-card">
             <h2 style="margin-top:0; color:#38bdf8; font-size:18px;">Add 2-Step Verification</h2>
             <p style="color:#94a3b8; font-size:13px; margin-bottom:15px;">Add account using Google Authenticator steps.</p>
@@ -388,7 +505,7 @@ try {
                 <button type="button" class="tab-btn" onclick="switchTab('manual')">⌨️ Enter Setup Key</button>
             </div>
 
-            <!-- Tab 1: Live Rear-Camera Scanner -->
+            <!-- Tab 1: Live Camera Scanner -->
             <div id="tab-camera" class="tab-content active">
                 <div id="scanner-viewfinder">
                     <span id="camera-placeholder" style="color:#64748b; font-size:13px;">Camera inactive</span>
@@ -414,10 +531,10 @@ try {
                 <form method="POST" action="/daboreystep2/dashboard.php" style="margin-top:10px;">
                     <input type="hidden" name="action" value="add_account">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                    
+
                     <input type="text" name="account_label" placeholder="Account name (e.g. GitHub)" required class="form-input">
-                    <input type="text" name="secret_key" id="manual-secret-input" placeholder="Your key (Base32 secret)" required class="form-input" oninput="sanitizeManualKey(this)">
-                    
+                    <input type="text" name="secret_key" placeholder="Your key (Base32 secret)" required class="form-input" oninput="sanitizeManualKey(this)">
+
                     <select class="form-input" disabled style="opacity:0.7;">
                         <option selected>Type of key: Time-based (TOTP)</option>
                     </select>
@@ -451,340 +568,360 @@ try {
         <?php endif; ?>
     </div>
 
-   <!-- Include Protobuf Library -->
-<script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js"></script>
+    <!-- Include Protobuf Library -->
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js"></script>
 
-<script>
-    // Tab Switcher Logic
-    function switchTab(tab) {
-        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    <script>
+        // Tab Switching Logic
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-        if (tab === 'camera') {
-            document.querySelectorAll('.tab-btn')[0].classList.add('active');
-            document.getElementById('tab-camera').classList.add('active');
-        } else {
-            stopCameraScanner();
-            document.querySelectorAll('.tab-btn')[1].classList.add('active');
-            document.getElementById('tab-manual').classList.add('active');
-        }
-    }
-
-    // Manual Key Real-time Sanitizer
-    function sanitizeManualKey(input) {
-        input.value = input.value.replace(/[^A-Za-z2-7]/g, '').toUpperCase();
-    }
-
-    // Camera Hardware Variables
-    let mediaStream = null;
-    let animationFrameId = null;
-
-    // Start Live Rear Camera Scanner
-    async function startCameraScanner() {
-        const video = document.getElementById('camera-feed');
-        const placeholder = document.getElementById('camera-placeholder');
-        const overlay = document.getElementById('scanner-overlay');
-        const btnStart = document.getElementById('btn-start-camera');
-        const btnStop = document.getElementById('btn-stop-camera');
-
-        try {
-            // Strictly target environment/rear camera
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: "environment" } }
-            });
-
-            video.srcObject = mediaStream;
-            video.setAttribute("playsinline", true);
-            await video.play();
-
-            placeholder.style.display = "none";
-            video.style.display = "block";
-            overlay.style.display = "block";
-            btnStart.style.display = "none";
-            btnStop.style.display = "block";
-
-            scanCameraFrame();
-        } catch (err) {
-            alert("Camera Access Error: " + (err.message || "Unable to access rear camera. Ensure HTTPS is enabled and permissions are granted."));
-            stopCameraScanner();
-        }
-    }
-
-    // Continuous Frame Scanning via jsQR
-    function scanCameraFrame() {
-        const video = document.getElementById('camera-feed');
-        const canvas = document.getElementById('qr-canvas');
-        const ctx = canvas.getContext('2d');
-
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-            if (code && code.data) {
-                // Key detected - process secret & release camera hardware
-                processCameraQRData(code.data.trim());
+            if (tab === 'camera') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('tab-camera').classList.add('active');
+            } else {
                 stopCameraScanner();
-                return;
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('tab-manual').classList.add('active');
             }
         }
-        animationFrameId = requestAnimationFrame(scanCameraFrame);
-    }
 
-    // Hardware Release: Turn off Camera Stream
-    function stopCameraScanner() {
-        if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-        }
-        if (mediaStream) {
-            mediaStream.getTracks().forEach(track => track.stop());
-            mediaStream = null;
+        // Real-Time Sanitizer for Manual Input Key
+        function sanitizeManualKey(input) {
+            input.value = input.value.replace(/[^A-Za-z2-7]/g, '').toUpperCase();
         }
 
-        const video = document.getElementById('camera-feed');
-        const placeholder = document.getElementById('camera-placeholder');
-        const overlay = document.getElementById('scanner-overlay');
-        const btnStart = document.getElementById('btn-start-camera');
-        const btnStop = document.getElementById('btn-stop-camera');
+        // Camera Hardware Variables
+        let mediaStream = null;
+        let animationFrameId = null;
 
-        if (video) video.style.display = "none";
-        if (placeholder) placeholder.style.display = "block";
-        if (overlay) overlay.style.display = "none";
-        if (btnStart) btnStart.style.display = "block";
-        if (btnStop) btnStop.style.display = "none";
-    }
+        // Start Live Rear Camera Scanner
+        async function startCameraScanner() {
+            const video = document.getElementById('camera-feed');
+            const placeholder = document.getElementById('camera-placeholder');
+            const overlay = document.getElementById('scanner-overlay');
+            const btnStart = document.getElementById('btn-start-camera');
+            const btnStop = document.getElementById('btn-stop-camera');
 
-    // Process Camera Scan Result
-    function processCameraQRData(qrData) {
-        let secret = "";
-        let label = "Scanned Account";
-
-        if (qrData.startsWith("otpauth://")) {
             try {
-                const url = new URL(qrData);
-                secret = url.searchParams.get("secret");
-                const pathParts = url.pathname.split('/');
-                if (pathParts.length > 1) {
-                    label = decodeURIComponent(pathParts[pathParts.length - 1]);
-                }
-                if (url.searchParams.get("issuer")) {
-                    label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
-                }
-            } catch (e) {}
-        } else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
-            secret = qrData.replace(/\s+/g, '');
+                // Strictly target environment/rear camera
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: {
+                            ideal: "environment"
+                        }
+                    }
+                });
+
+                video.srcObject = mediaStream;
+                video.setAttribute("playsinline", true);
+                await video.play();
+
+                placeholder.style.display = "none";
+                video.style.display = "block";
+                overlay.style.display = "block";
+                btnStart.style.display = "none";
+                btnStop.style.display = "block";
+
+                scanCameraFrame();
+            } catch (err) {
+                alert("Camera Access Error: " + (err.message || "Unable to access rear camera. Ensure HTTPS is enabled and permissions are granted."));
+                stopCameraScanner();
+            }
         }
 
-        secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
+        // Continuous Frame Scanning via jsQR
+        function scanCameraFrame() {
+            const video = document.getElementById('camera-feed');
+            const canvas = document.getElementById('qr-canvas');
+            const ctx = canvas.getContext('2d');
 
-        if (secret.length >= 8) {
-            document.getElementById('camera-extracted-secret').value = secret;
-            document.getElementById('camera-extracted-label').value = label;
-            document.getElementById('camera-save-form').style.display = "block";
-        } else {
-            alert("QR scanned, but no valid Base32 TOTP key was detected.");
-        }
-    }
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // 1. Process and Parse Uploaded QR Code Image
-    function processQRImage(input) {
-        if (!input.files || !input.files[0]) return;
-        const file = input.files[0];
-        document.getElementById('upload-label').innerText = "Processing " + file.name + "...";
-
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            const img = new Image();
-            img.onload = function () {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0, img.width, img.height);
-                
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height);
 
                 if (code && code.data) {
-                    parseQRContent(code.data.trim());
-                } else {
-                    alert("Could not detect a valid QR code in the uploaded image.");
-                    document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+                    // Key detected - process secret & release camera hardware
+                    processCameraQRData(code.data.trim());
+                    stopCameraScanner();
+                    return;
                 }
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
+            }
+            animationFrameId = requestAnimationFrame(scanCameraFrame);
+        }
 
-    // Helper: Convert Uint8Array to Base32 String
-    function bytesToBase32(bytes) {
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-        let bits = 0;
-        let value = 0;
-        let output = "";
-        for (let i = 0; i < bytes.length; i++) {
-            value = (value << 8) | bytes[i];
-            bits += 8;
-            while (bits >= 5) {
-                output += alphabet[(value >>> (bits - 5)) & 31];
-                bits -= 5;
+        // Hardware Release: Turn off Camera Stream
+        function stopCameraScanner() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            const video = document.getElementById('camera-feed');
+            const placeholder = document.getElementById('camera-placeholder');
+            const overlay = document.getElementById('scanner-overlay');
+            const btnStart = document.getElementById('btn-start-camera');
+            const btnStop = document.getElementById('btn-stop-camera');
+
+            if (video) video.style.display = "none";
+            if (placeholder) placeholder.style.display = "block";
+            if (overlay) overlay.style.display = "none";
+            if (btnStart) btnStart.style.display = "block";
+            if (btnStop) btnStop.style.display = "none";
+        }
+
+        // Process Camera Scan Result
+        function processCameraQRData(qrData) {
+            let secret = "";
+            let label = "Scanned Account";
+
+            if (qrData.startsWith("otpauth://")) {
+                try {
+                    const url = new URL(qrData);
+                    secret = url.searchParams.get("secret");
+                    const pathParts = url.pathname.split('/');
+                    if (pathParts.length > 1) {
+                        label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                    }
+                    if (url.searchParams.get("issuer")) {
+                        label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
+                    }
+                } catch (e) {}
+            } else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
+                secret = qrData.replace(/\s+/g, '');
+            }
+
+            secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
+
+            if (secret.length >= 8) {
+                document.getElementById('camera-extracted-secret').value = secret;
+                document.getElementById('camera-extracted-label').value = label;
+                document.getElementById('camera-save-form').style.display = "block";
+            } else {
+                alert("QR scanned, but no valid Base32 TOTP key was detected.");
             }
         }
-        if (bits > 0) {
-            output += alphabet[(value << (5 - bits)) & 31];
-        }
-        return output;
-    }
 
-    // 2. Flexible QR Data Parser (Handles URI, Migration Exports, Raw Base32 Secrets)
-    function parseQRContent(qrData) {
-        let secret = "";
-        let label = "Uploaded 2FA Account";
+        // 1. Process and Parse Uploaded QR Code Image
+        function processQRImage(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            document.getElementById('upload-label').innerText = "Processing " + file.name + "...";
 
-        // Case A: Google Authenticator Migration Link (otpauth-migration://)
-        if (qrData.startsWith("otpauth-migration://")) {
-            try {
-                const url = new URL(qrData);
-                const dataParam = url.searchParams.get("data");
-                if (dataParam) {
-                    const binaryStr = atob(dataParam);
-                    const bytes = new Uint8Array(binaryStr.length);
-                    for (let i = 0; i < binaryStr.length; i++) {
-                        bytes[i] = binaryStr.charCodeAt(i);
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code && code.data) {
+                        parseQRContent(code.data.trim());
+                    } else {
+                        alert("Could not detect a valid QR code in the uploaded image.");
+                        document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
                     }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
 
-                    // ProtoBuf schema structure for Google Authenticator Export
-                    const root = protobuf.Root.fromJSON({
-                        nested: {
-                            MigrationPayload: {
-                                fields: {
-                                    otpParameters: { rule: "repeated", type: "OtpParameters", id: 1 }
-                                }
-                            },
-                            OtpParameters: {
-                                fields: {
-                                    secret: { type: "bytes", id: 1 },
-                                    name: { type: "string", id: 2 },
-                                    issuer: { type: "string", id: 3 }
+        // Helper: Convert Uint8Array to Base32 String
+        function bytesToBase32(bytes) {
+            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+            let bits = 0;
+            let value = 0;
+            let output = "";
+            for (let i = 0; i < bytes.length; i++) {
+                value = (value << 8) | bytes[i];
+                bits += 8;
+                while (bits >= 5) {
+                    output += alphabet[(value >>> (bits - 5)) & 31];
+                    bits -= 5;
+                }
+            }
+            if (bits > 0) {
+                output += alphabet[(value << (5 - bits)) & 31];
+            }
+            return output;
+        }
+
+        // 2. Flexible QR Data Parser (Handles URI, Migration Exports, Raw Base32 Secrets)
+        function parseQRContent(qrData) {
+            let secret = "";
+            let label = "Uploaded 2FA Account";
+
+            // Case A: Google Authenticator Migration Link (otpauth-migration://)
+            if (qrData.startsWith("otpauth-migration://")) {
+                try {
+                    const url = new URL(qrData);
+                    const dataParam = url.searchParams.get("data");
+                    if (dataParam) {
+                        const binaryStr = atob(dataParam);
+                        const bytes = new Uint8Array(binaryStr.length);
+                        for (let i = 0; i < binaryStr.length; i++) {
+                            bytes[i] = binaryStr.charCodeAt(i);
+                        }
+
+                        // ProtoBuf schema structure for Google Authenticator Export
+                        const root = protobuf.Root.fromJSON({
+                            nested: {
+                                MigrationPayload: {
+                                    fields: {
+                                        otpParameters: {
+                                            rule: "repeated",
+                                            type: "OtpParameters",
+                                            id: 1
+                                        }
+                                    }
+                                },
+                                OtpParameters: {
+                                    fields: {
+                                        secret: {
+                                            type: "bytes",
+                                            id: 1
+                                        },
+                                        name: {
+                                            type: "string",
+                                            id: 2
+                                        },
+                                        issuer: {
+                                            type: "string",
+                                            id: 3
+                                        }
+                                    }
                                 }
                             }
+                        });
+
+                        const MigrationPayload = root.lookupType("MigrationPayload");
+                        const message = MigrationPayload.decode(bytes);
+
+                        if (message.otpParameters && message.otpParameters.length > 0) {
+                            const param = message.otpParameters[0]; // Extract first account
+                            secret = bytesToBase32(param.secret);
+                            label = (param.issuer ? param.issuer + " (" + param.name + ")" : param.name) || "Google Exported Token";
                         }
-                    });
+                    }
+                } catch (e) {
+                    console.error("Migration Parse Error:", e);
+                }
+            }
+            // Case B: Standard otpauth:// URI
+            else if (qrData.startsWith("otpauth://")) {
+                try {
+                    const url = new URL(qrData);
+                    secret = url.searchParams.get("secret");
+                    const pathParts = url.pathname.split('/');
+                    if (pathParts.length > 1) {
+                        label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                    }
+                    if (url.searchParams.get("issuer")) {
+                        label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
+                    }
+                } catch (e) {
+                    console.error("URI Parse Error:", e);
+                }
+            }
+            // Case C: Raw Base32 Secret Key String
+            else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
+                secret = qrData.replace(/\s+/g, '');
+                label = "Backup Key Token";
+            }
+            // Case D: Plain key-value parameter containing secret=
+            else if (qrData.includes("secret=")) {
+                const match = qrData.match(/secret=([A-Za-z2-7]+)/i);
+                if (match && match[1]) {
+                    secret = match[1];
+                }
+            }
 
-                    const MigrationPayload = root.lookupType("MigrationPayload");
-                    const message = MigrationPayload.decode(bytes);
+            // Clean & Validate Secret
+            secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
 
-                    if (message.otpParameters && message.otpParameters.length > 0) {
-                        const param = message.otpParameters[0]; // Extract first account
-                        secret = bytesToBase32(param.secret);
-                        label = (param.issuer ? param.issuer + " (" + param.name + ")" : param.name) || "Google Exported Token";
+            if (secret.length >= 8) {
+                document.getElementById('extracted-secret').value = secret;
+                document.getElementById('extracted-label').value = label;
+                document.getElementById('upload-label').innerText = "✅ Decoded: " + label;
+                document.getElementById('save-account-form').style.display = "block";
+            } else {
+                alert("The QR code was read, but no valid Base32 TOTP secret key could be extracted.\n\nScanned content: " + qrData);
+                document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
+            }
+        }
+
+        // 3. Real-time TOTP Code & Progress Bar Generator
+        function updateTOTPCodes() {
+            const cards = document.querySelectorAll('.account-card');
+            const seconds = new Date().getSeconds();
+            const remaining = 30 - (seconds % 30);
+            const progressPercent = (remaining / 30) * 100;
+
+            cards.forEach(card => {
+                const secret = card.getAttribute('data-secret');
+                const codeElement = card.querySelector('.totp-code');
+                const barElement = card.querySelector('.timer-bar');
+
+                if (secret && window.OTPAuth) {
+                    try {
+                        const totp = new OTPAuth.TOTP({
+                            secret: OTPAuth.Secret.fromBase32(secret)
+                        });
+                        codeElement.innerText = totp.generate();
+                    } catch (e) {
+                        codeElement.innerText = "ERROR";
                     }
                 }
-            } catch (e) {
-                console.error("Migration Parse Error:", e);
-            }
-        }
-        // Case B: Standard otpauth:// URI
-        else if (qrData.startsWith("otpauth://")) {
-            try {
-                const url = new URL(qrData);
-                secret = url.searchParams.get("secret");
-                const pathParts = url.pathname.split('/');
-                if (pathParts.length > 1) {
-                    label = decodeURIComponent(pathParts[pathParts.length - 1]);
+                if (barElement) {
+                    barElement.style.width = progressPercent + "%";
                 }
-                if (url.searchParams.get("issuer")) {
-                    label = decodeURIComponent(url.searchParams.get("issuer")) + " (" + label + ")";
-                }
-            } catch (e) {
-                console.error("URI Parse Error:", e);
-            }
-        } 
-        // Case C: Raw Base32 Secret Key String
-        else if (/^[A-Za-z2-7=\s]{16,64}$/.test(qrData)) {
-            secret = qrData.replace(/\s+/g, '');
-            label = "Backup Key Token";
+            });
         }
-        // Case D: Plain key-value parameter containing secret=
-        else if (qrData.includes("secret=")) {
-            const match = qrData.match(/secret=([A-Za-z2-7]+)/i);
-            if (match && match[1]) {
-                secret = match[1];
+        setInterval(updateTOTPCodes, 1000);
+        updateTOTPCodes();
+
+        // 4. Header Clock Script
+        function updateKhmerClock() {
+            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+
+            function toKhmerNum(num) {
+                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
             }
+
+            const now = new Date();
+            let rawHours = now.getHours();
+            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+            rawHours = rawHours % 12 || 12;
+
+            document.getElementById('hours').innerText = toKhmerNum(rawHours);
+            document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
+            document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
+            document.getElementById('ampm').innerText = ampmKhmer;
+
+            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
+            document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
         }
-
-        // Clean & Validate Secret
-        secret = (secret || "").replace(/[^A-Za-z2-7]/g, '').toUpperCase();
-
-        if (secret.length >= 8) {
-            document.getElementById('extracted-secret').value = secret;
-            document.getElementById('extracted-label').value = label;
-            document.getElementById('upload-label').innerText = "✅ Decoded: " + label;
-            document.getElementById('save-account-form').style.display = "block";
-        } else {
-            alert("The QR code was read, but no valid Base32 TOTP secret key could be extracted.\n\nScanned content: " + qrData);
-            document.getElementById('upload-label').innerText = "Click or Drag & Drop QR Image Here";
-        }
-    }
-
-    // 3. Real-time TOTP Code & Progress Bar Generator
-    function updateTOTPCodes() {
-        const cards = document.querySelectorAll('.account-card');
-        const seconds = new Date().getSeconds();
-        const remaining = 30 - (seconds % 30);
-        const progressPercent = (remaining / 30) * 100;
-
-        cards.forEach(card => {
-            const secret = card.getAttribute('data-secret');
-            const codeElement = card.querySelector('.totp-code');
-            const barElement = card.querySelector('.timer-bar');
-
-            if (secret && window.OTPAuth) {
-                try {
-                    const totp = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(secret) });
-                    codeElement.innerText = totp.generate();
-                } catch (e) {
-                    codeElement.innerText = "ERROR";
-                }
-            }
-            if (barElement) {
-                barElement.style.width = progressPercent + "%";
-            }
-        });
-    }
-    setInterval(updateTOTPCodes, 1000);
-    updateTOTPCodes();
-
-    // 4. Header Clock Script
-    function updateKhmerClock() {
-        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-
-        function toKhmerNum(num) {
-            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-        }
-
-        const now = new Date();
-        let rawHours = now.getHours();
-        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-        rawHours = rawHours % 12 || 12;
-
-        document.getElementById('hours').innerText = toKhmerNum(rawHours);
-        document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
-        document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
-        document.getElementById('ampm').innerText = ampmKhmer;
-
-        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
-        document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-    }
-    updateKhmerClock();
-    setInterval(updateKhmerClock, 1000);
-</script>
+        updateKhmerClock();
+        setInterval(updateKhmerClock, 1000);
+    </script>
 </body>
+
 </html>
