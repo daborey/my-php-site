@@ -18,8 +18,8 @@
         <li><a href="https://beeceptor.com/resources/2fa-code-generator/?id=23313001-4512-4e8b-a5e7-7813e41c9ed9" target="_blank">2 steps khmerdevelopercommunity github</a></li>
         <li><a href="https://daborey.github.io/freeuserapp88992step/" target="_blank">2 steps freeuserapp8899 gmail</a></li>
         <li><a href="https://drive.google.com/drive/folders/1bqrl2ymxugfXYdH1RYhM1g8xJY2XMnKw?usp=sharing" target="_blank">banks</a></li>
-        <li><a href="https://daborey.infinityfreeapp.com/daboreystep" target="_blank">daboreystep</a></li>
-        <li><a href="https://daborey.infinityfreeapp.com/daboreypasswordmanager" target="_blank">daboreypasswordmanager</a></li>
+        <li><a href="https://my-php-site-443996634107.us-central1.run.app/daboreystep2" target="_blank">daboreystep2</a></li>
+        <li><a href="https://my-php-site-443996634107.us-central1.run.app/daboreytextnote" target="_blank">daboreytextnote</a></li>
         <li><a href="account.html" target="_blank">apple id info</a></li>
         <li><a href="https://daborey.github.io/appgalleryconvert/" target="_blank">app gallery convert</a></li>
         <li><a href="newuser.html" target="_blank">create a new user window</a></li>
