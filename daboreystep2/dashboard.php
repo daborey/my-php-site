@@ -309,11 +309,94 @@ try {
             font-size: 12px;
             float: right;
         }
-
+        
         .status-error {
             text-align: center;
             color: #ef4444;
             margin-bottom: 15px;
+        }
+
+        /* Mobile & Tablet Responsiveness */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .header-title-zone {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .user-info {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .btn-profile, .btn-logout {
+                margin-left: 0 !important;
+                padding: 10px 14px;
+                font-size: 13px;
+                display: inline-block;
+            }
+
+            .clock-container {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 4px;
+                padding: 8px;
+            }
+
+            .cell-value {
+                font-size: 16px;
+            }
+
+            .cell-label {
+                font-size: 9px;
+            }
+
+            .date-cell {
+                font-size: 11px;
+            }
+
+            .dual-column-container {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .feature-card {
+                padding: 16px;
+            }
+
+            #scanner-viewfinder {
+                max-width: 100%;
+                height: 200px;
+            }
+
+            .accounts-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .totp-code {
+                font-size: 28px;
+            }
+
+            .btn-action, .btn-delete {
+                min-height: 44px;
+                line-height: 24px;
+            }
         }
     </style>
 </head>
