@@ -48,23 +48,74 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 ?>
+//
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Daborey Step 2</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #1e293b; padding: 30px; border-radius: 8px; border: 1px solid #334155; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            background: #0f172a; 
+            color: #f8fafc; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        .card { 
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 8px; 
+            border: 1px solid #334155; 
+            width: 100%;
+            max-width: 340px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); 
+            box-sizing: border-box;
+        }
         h2 { color: #38bdf8; margin-top: 0; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #0284c7; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 10px 0; 
+            background: #0f172a; 
+            border: 1px solid #334155; 
+            color: white; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            font-size: 14px;
+        }
+        button { 
+            width: 100%; 
+            min-height: 44px;
+            padding: 12px; 
+            background: #0284c7; 
+            border: none; 
+            color: white; 
+            font-weight: bold; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin-top: 10px; 
+            font-size: 14px;
+        }
+        button:hover { background: #0369a1; }
         .error { color: #ef4444; font-size: 13px; text-align: center; margin-bottom: 10px; }
-        .links { margin-top: 15px; text-align: center; font-size: 13px; }
-        .links a { color: #38bdf8; text-decoration: none; margin: 0 5px; }
+        .links { margin-top: 20px; text-align: center; font-size: 14px; }
+        .links a { color: #38bdf8; text-decoration: none; margin: 0 8px; display: inline-block; padding: 4px 0; }
         .links a:hover { text-decoration: underline; }
+
+        @media (max-width: 480px) {
+            .card { padding: 20px; }
+            h2 { font-size: 20px; }
+        }
     </style>
 </head>
+//
 <body>
     <div class="card">
         <h2>Sign In</h2>
