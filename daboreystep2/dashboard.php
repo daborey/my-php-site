@@ -118,7 +118,6 @@ try {
 <!DOCTYPE html>
 <html lang="km">
 
-//
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -310,7 +309,7 @@ try {
             font-size: 12px;
             float: right;
         }
-        
+
         .status-error {
             text-align: center;
             color: #ef4444;
@@ -464,7 +463,8 @@ try {
                 margin-top: 10px;
             }
 
-            .btn-profile, .btn-logout {
+            .btn-profile,
+            .btn-logout {
                 margin-left: 0 !important;
                 padding: 10px 14px;
                 font-size: 13px;
@@ -512,7 +512,8 @@ try {
                 font-size: 28px;
             }
 
-            .btn-action, .btn-delete {
+            .btn-action,
+            .btn-delete {
                 min-height: 44px;
                 line-height: 24px;
             }
@@ -552,10 +553,9 @@ try {
         </div>
     </header>
 
-    <?php if (!empty($status_msg)): ?>
+    <?php if (!empty($status_msg)) : ?>
         <div class="status-error"><?php echo sanitize($status_msg); ?></div>
     <?php endif; ?>
-//
 
     <!-- Dual-Column Feature Area -->
     <div class="dual-column-container">
@@ -630,8 +630,8 @@ try {
 
     <!-- Live 2FA Tokens Grid -->
     <div class="accounts-grid">
-        <?php if (!empty($accounts)): ?>
-            <?php foreach ($accounts as $acc): ?>
+        <?php if (!empty($accounts)) : ?>
+            <?php foreach ($accounts as $acc) : ?>
                 <div class="account-card" data-secret="<?php echo sanitize($acc['secret_key']); ?>">
                     <form method="POST" action="/daboreystep2/dashboard.php" style="display:inline;">
                         <input type="hidden" name="action" value="delete_account">
@@ -644,7 +644,7 @@ try {
                     <div class="timer-bar" id="bar-<?php echo $acc['id']; ?>"></div>
                 </div>
             <?php endforeach; ?>
-        <?php else: ?>
+        <?php else : ?>
             <div style="grid-column: 1 / -1; text-align:center; color:#64748b; margin-top:30px;">
                 No 2FA tokens added yet. Upload a QR code image above to start generating 6-digit codes.
             </div>
