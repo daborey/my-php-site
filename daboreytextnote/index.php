@@ -61,7 +61,6 @@ $tableInfo = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC);
 $existingColumns = array_column($tableInfo, 'name');
 $hasUpdatedAt = in_array('updated_at', $existingColumns);
 
-//
 // 4. Session Guards
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -129,7 +128,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $action = $_POST['action'] ?? 'create';
 
-    //
     if ($action === 'import') {
         if (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
             $htmlContent = file_get_contents($_FILES['import_file']['tmp_name']);
@@ -429,7 +427,6 @@ try {
         <div class="header-title-zone">
             <h1>Secure Notes Portal</h1>
             <div class="user-info">
-                //
                 Authenticated Entity: <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong>
                 <a href="index.php?action=export" class="btn-logout" style="background:#10b981;">Export HTML</a>
                 <button type="button" onclick="document.getElementById('importModal').style.display='flex'" class="btn-logout" style="background:#0284c7; border:none; cursor:pointer;">Import HTML</button>
@@ -519,7 +516,6 @@ try {
             </form>
         </div>
     </div>
-    //
     <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
         <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
             <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
