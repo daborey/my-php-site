@@ -61,6 +61,7 @@ $tableInfo = $db->query("PRAGMA table_info(notes)")->fetchAll(PDO::FETCH_ASSOC);
 $existingColumns = array_column($tableInfo, 'name');
 $hasUpdatedAt = in_array('updated_at', $existingColumns);
 
+//
 // 4. Session Guards
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -72,7 +73,55 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-// 5. Handle Form Submissions (Create, Edit, Delete)
+// Ensure user table has import_key column
+try {
+    $db->exec("ALTER TABLE users ADD COLUMN import_key TEXT");
+} catch (Exception $e) {
+    // Column already exists
+}
+
+// Retrieve or create persistent key lock for current user
+$stmtKey = $db->prepare("SELECT import_key FROM users WHERE id = ?");
+$stmtKey->execute([$user_id]);
+$userRow = $stmtKey->fetch(PDO::FETCH_ASSOC);
+
+if (empty($userRow['import_key'])) {
+    $userImportKey = bin2hex(random_bytes(16));
+    $stmtKeyUpdate = $db->prepare("UPDATE users SET import_key = ? WHERE id = ?");
+    $stmtKeyUpdate->execute([$userImportKey, $user_id]);
+} else {
+    $userImportKey = $userRow['import_key'];
+}
+
+// Handle Export Request
+if (isset($_GET['action']) && $_GET['action'] === 'export') {
+    $stmtExport = $db->prepare("SELECT title, content, created_at FROM notes WHERE user_id = ? OR user_id IS NULL OR user_id = 0 ORDER BY created_at DESC");
+    $stmtExport->execute([$user_id]);
+    $exportNotes = $stmtExport->fetchAll(PDO::FETCH_ASSOC);
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: attachment; filename="daborey_notes_export_' . date('Y-m-d') . '.html"');
+
+    echo "<!DOCTYPE html>\n<html lang=\"km\">\n<head>\n";
+    echo "<meta charset=\"UTF-8\">\n";
+    echo "<meta name=\"daborey-key-lock\" content=\"" . htmlspecialchars($userImportKey) . "\">\n";
+    echo "<title>Da Borey Text Note - Backup</title>\n";
+    echo "<style>body{font-family:sans-serif;margin:20px;background:#0f172a;color:#f8fafc;}.note-card{background:#1e293b;padding:15px;margin-bottom:15px;border-radius:8px;border:1px solid #334155;}.note-title{font-weight:bold;font-size:1.1em;color:#38bdf8;margin-bottom:8px;}.note-content{white-space:pre-wrap;color:#cbd5e1;margin-bottom:10px;}.note-date{font-size:0.8em;color:#64748b;text-align:right;}</style>\n";
+    echo "</head>\n<body>\n<h1>Da Borey Text Note Backup</h1>\n";
+
+    foreach ($exportNotes as $note) {
+        echo "<div class=\"note-card\">\n";
+        echo "  <div class=\"note-title\">" . htmlspecialchars($note['title'] ?: 'Untitled') . "</div>\n";
+        echo "  <div class=\"note-content\">" . htmlspecialchars($note['content']) . "</div>\n";
+        echo "  <div class=\"note-date\">" . htmlspecialchars($note['created_at']) . "</div>\n";
+        echo "</div>\n";
+    }
+
+    echo "</body>\n</html>";
+    exit;
+}
+
+// 5. Handle Form Submissions (Create, Edit, Delete, Import)
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         die("Security token validation failed.");
@@ -80,7 +129,48 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $action = $_POST['action'] ?? 'create';
 
-    if ($action === 'delete') {
+    //
+    if ($action === 'import') {
+        if (isset($_FILES['import_file']) && $_FILES['import_file']['error'] === UPLOAD_ERR_OK) {
+            $htmlContent = file_get_contents($_FILES['import_file']['tmp_name']);
+
+            // Extract and validate Key Lock
+            if (preg_match('/<meta\s+name=["\']daborey-key-lock["\']\s+content=["\']([^"\']+)["\']/i', $htmlContent, $matches)) {
+                $fileKey = $matches[1];
+
+                if ($fileKey === $userImportKey) {
+                    libxml_use_internal_errors(true);
+                    $doc = new DOMDocument();
+                    $doc->loadHTML(mb_convert_encoding($htmlContent, 'HTML-ENTITIES', 'UTF-8'));
+                    libxml_clear_errors();
+
+                    $xpath = new DOMXPath($doc);
+                    $cards = $xpath->query("//div[contains(concat(' ', normalize-space(@class), ' '), ' note-card ')]");
+
+                    $stmtImport = $db->prepare("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)");
+                    foreach ($cards as $card) {
+                        $titleNode = $xpath->query(".//div[contains(concat(' ', normalize-space(@class), ' '), ' note-title ')]", $card)->item(0);
+                        $contentNode = $xpath->query(".//div[contains(concat(' ', normalize-space(@class), ' '), ' note-content ')]", $card)->item(0);
+
+                        $title = $titleNode ? trim($titleNode->nodeValue) : 'Untitled';
+                        $content = $contentNode ? trim($contentNode->nodeValue) : '';
+
+                        if (!empty($title) || !empty($content)) {
+                            $stmtImport->execute([$user_id, $title, $content]);
+                        }
+                    }
+                    header("Location: index.php?import=success");
+                    exit;
+                } else {
+                    die("Import failed: Invalid Key Lock. This HTML file was not generated by your account.");
+                }
+            } else {
+                die("Import failed: Key Lock metadata is missing from the uploaded file.");
+            }
+        } else {
+            die("Please select a valid HTML backup file to import.");
+        }
+    } elseif ($action === 'delete') {
         $note_id = (int)($_POST['note_id'] ?? 0);
         if ($note_id > 0) {
             $stmt = $db->prepare("DELETE FROM notes WHERE id = ?");
@@ -339,8 +429,12 @@ try {
         <div class="header-title-zone">
             <h1>Secure Notes Portal</h1>
             <div class="user-info">
+                //
                 Authenticated Entity: <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></strong>
+                <a href="index.php?action=export" class="btn-logout" style="background:#10b981;">Export HTML</a>
+                <button type="button" onclick="document.getElementById('importModal').style.display='flex'" class="btn-logout" style="background:#0284c7; border:none; cursor:pointer;">Import HTML</button>
                 <a href="logout.php" class="btn-logout">Sign Out</a>
+            </div>
             </div>
         </div>
 
@@ -405,7 +499,27 @@ try {
         <?php endif; ?>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Import Modal -->
+    <div id="importModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
+            <h3 style="margin-top: 0; color: #38bdf8;">Import Notes (HTML File)</h3>
+            <form method="POST" action="index.php" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
+                <input type="hidden" name="action" value="import">
+
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 14px; color: #cbd5e1; display: block; margin-bottom: 8px;">Select validated backup file:</label>
+                    <input type="file" name="import_file" accept=".html,.htm" required style="width: 100%; color: #cbd5e1;">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="document.getElementById('importModal').style.display='none'" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                    <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Upload & Import</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    //
     <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
         <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
             <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
