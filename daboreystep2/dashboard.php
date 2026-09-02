@@ -118,6 +118,7 @@ try {
 <!DOCTYPE html>
 <html lang="km">
 
+//
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -316,6 +317,124 @@ try {
             margin-bottom: 15px;
         }
 
+        .dual-column-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto 30px auto;
+        }
+
+        .feature-card {
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            text-align: center;
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .tab-btn.active {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #38bdf8;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        #scanner-viewfinder {
+            width: 100%;
+            max-width: 320px;
+            height: 240px;
+            background: #0f172a;
+            border: 2px dashed #38bdf8;
+            border-radius: 8px;
+            margin: 15px auto;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .scanner-overlay {
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            border: 2px solid #4ade80;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+            display: none;
+            pointer-events: none;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 10px;
+            background: #0284c7;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-action:hover {
+            background: #0369a1;
+        }
+
+        .btn-stop {
+            background: #ef4444;
+            margin-top: 10px;
+        }
+
+        .btn-stop:hover {
+            background: #dc2626;
+        }
+
         /* Mobile & Tablet Responsiveness */
         @media (max-width: 768px) {
             body {
@@ -436,126 +555,7 @@ try {
     <?php if (!empty($status_msg)): ?>
         <div class="status-error"><?php echo sanitize($status_msg); ?></div>
     <?php endif; ?>
-
-    <style>
-        .dual-column-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 25px;
-            max-width: 1200px;
-            margin: 0 auto 30px auto;
-        }
-
-        .feature-card {
-            background: #1e293b;
-            padding: 25px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            text-align: center;
-        }
-
-        .tab-buttons {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 10px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: #94a3b8;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
-        }
-
-        .tab-btn.active {
-            background: #0284c7;
-            color: #ffffff;
-            border-color: #38bdf8;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        #scanner-viewfinder {
-            width: 100%;
-            max-width: 320px;
-            height: 240px;
-            background: #0f172a;
-            border: 2px dashed #38bdf8;
-            border-radius: 8px;
-            margin: 15px auto;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: none;
-        }
-
-        .scanner-overlay {
-            position: absolute;
-            width: 160px;
-            height: 160px;
-            border: 2px solid #4ade80;
-            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.4);
-            border-radius: 8px;
-            display: none;
-            pointer-events: none;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 10px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-            border-radius: 4px;
-            margin-bottom: 12px;
-            box-sizing: border-box;
-            font-size: 14px;
-        }
-
-        .btn-action {
-            width: 100%;
-            padding: 10px;
-            background: #0284c7;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .btn-action:hover {
-            background: #0369a1;
-        }
-
-        .btn-stop {
-            background: #ef4444;
-            margin-top: 10px;
-        }
-
-        .btn-stop:hover {
-            background: #dc2626;
-        }
-    </style>
+//
 
     <!-- Dual-Column Feature Area -->
     <div class="dual-column-container">
