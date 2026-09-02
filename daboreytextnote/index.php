@@ -418,6 +418,86 @@ try {
             color: #64748b;
             text-align: right;
         }
+
+        /* Mobile & Tablet Responsiveness */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            header {
+                flex-direction: column;
+                align-items: stretch;
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .header-title-zone {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .user-info {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            .btn-logout {
+                margin-left: 0 !important;
+                padding: 10px 14px;
+                font-size: 13px;
+            }
+
+            .clock-container {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 4px;
+                padding: 8px;
+            }
+
+            .cell-value {
+                font-size: 16px;
+            }
+
+            .cell-label {
+                font-size: 9px;
+            }
+
+            .date-cell {
+                font-size: 11px;
+            }
+
+            .note-creator-container {
+                margin-bottom: 24px;
+            }
+
+            .note-creator {
+                max-width: 100%;
+            }
+
+            .notes-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            /* Responsive Action Buttons */
+            .note-card button {
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+            }
+
+            /* Edge-to-Edge Mobile Modals */
+            #editModal > div, #importModal > div {
+                width: 95% !important;
+                padding: 16px !important;
+                box-sizing: border-box;
+            }
+        }
     </style>
 </head>
 
