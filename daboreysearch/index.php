@@ -14,12 +14,28 @@ if (!isset($_SESSION['search_user_id'])) {
     exit;
 }
 
-
-
 $keyword = $_GET['q'] ?? '';
 $source_filter = $_GET['source'] ?? '';
 $results = [];
 $total_results = 0;
+$crawl_error = '';
+
+// ===== HANDLE QUICK CRAWL =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'crawl_now') {
+    // CSRF check
+    if (!isset($_POST['csrf_token']) || !validate_csrf($_POST['csrf_token'])) {
+        $crawl_error = "Security validation failed.";
+    } else {
+        $crawl_url = trim($_POST['crawl_url'] ?? '');
+        if (!empty($crawl_url)) {
+            // Redirect to crawl.php with the URL
+            header("Location: /daboreysearch/crawl.php?url=" . urlencode($crawl_url) . "&auto=1");
+            exit;
+        } else {
+            $crawl_error = "Please enter a valid URL.";
+        }
+    }
+}
 
 if (!empty($keyword)) {
     // Rate limiting
@@ -103,6 +119,63 @@ $total_urls = count_urls();
         /* Search Box */
         .search-container {
             margin-bottom: 30px;
+        }
+
+        /* Quick Crawl Form */
+        .crawl-form {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            margin-bottom: 30px;
+        }
+
+        .crawl-form .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .crawl-form input[type="url"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 6px;
+            outline: none;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .crawl-form input[type="url"]:focus {
+            border-color: #10b981;
+        }
+
+        .crawl-form .btn-crawl {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+            transition: background 0.2s;
+        }
+
+        .crawl-form .btn-crawl:hover {
+            background: #059669;
+        }
+
+        .crawl-form .hint {
+            color: #64748b;
+            font-size: 12px;
+            display: block;
+            margin-top: 8px;
         }
 
         .search-box {
@@ -319,6 +392,8 @@ $total_urls = count_urls();
             </div>
         <?php endif; ?>
 
+        <?php if (isset($_GET['crawled'])): ?> <div class="success"> ✅ Crawl completed! <strong><?php echo htmlspecialchars($_GET['crawled']); ?></strong> pages indexed from: <strong><?php echo htmlspecialchars($_GET['source'] ?? ''); ?></strong> </div> <?php endif; ?>
+
         <header>
             <div class="logo">
                 <h1>🔍 <?php echo $site_name; ?></h1>
@@ -376,9 +451,20 @@ $total_urls = count_urls();
             </form>
         </div>
 
+        <!-- Quick Crawl Form -->
+        <div class="crawl-form">
+            <form method="POST" action="/daboreysearch/index.php"> <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>"> <input type="hidden" name="action" value="crawl_now">
+                <div class="form-row"> <input type="url" name="crawl_url" placeholder="Enter URL to crawl (e.g., https://example.com)" required> <button type="submit" class="btn-crawl">➕ Add & Crawl</button> </div> <small class="hint">Crawls up to 100 pages from the website. URLs are saved with source = domain name.</small>
+            </form>
+        </div>
+
         <!-- Error -->
         <?php if (isset($error)) : ?>
             <div class="error">⚠️ <?php echo htmlspecialchars($error); ?></div>
+        <?php endif; ?>
+
+        <?php if (isset($crawl_error)) : ?>
+            <div class="error">⚠️ <?php echo htmlspecialchars($crawl_error); ?></div>
         <?php endif; ?>
 
         <!-- Results -->

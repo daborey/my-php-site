@@ -12,12 +12,30 @@ if (!isset($_SESSION['search_user_id'])) {
     exit;
 }
 
-// Simple password protection (optional)
-$crawl_password = 'crawl123'; // CHANGE THIS!
+// ===== AUTO-CRAWL FROM INDEX =====
+$auto_url = $_GET['url'] ?? '';
+$auto_mode = isset($_GET['auto']) && $_GET['auto'] == 1;
 
-// Check if password provided
-if (!isset($_GET['pass']) || $_GET['pass'] !== $crawl_password) {
-    die("🔒 Access denied. Add ?pass=crawl123 to the URL.");
+if ($auto_mode && !empty($auto_url)) {
+    // Auto-start crawl
+    echo '<div class="container">';
+    echo '<h1>🕷️ Auto-Crawling...</h1>';
+    echo '<div class="output">';
+    echo "🔄 Starting crawl from index page...\n";
+    echo "📍 Target: $auto_url\n";
+    echo "📄 Max pages: 100\n";
+    echo str_repeat('-', 40) . "\n";
+    
+    $crawled = crawl_website($auto_url, 100);
+    
+    echo str_repeat('-', 40) . "\n";
+    echo "✅ Crawl complete!\n";
+    echo "📊 Total pages crawled: $crawled\n";
+    echo "📚 Total URLs in database: " . count_urls() . "\n";
+    echo '</div>';
+    echo '<a href="/daboreysearch/index.php?crawled=' . $crawled . '&source=' . urlencode(parse_url($auto_url, PHP_URL_HOST)) . '" class="back-link">← Back to Search</a>';
+    echo '</div>';
+    exit;
 }
 
 // Function to crawl a website
