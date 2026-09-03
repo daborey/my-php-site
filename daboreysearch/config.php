@@ -34,6 +34,13 @@ try {
         crawled_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
+    // Auto-migrate missing 'source' column
+    try {
+        $db->exec("ALTER TABLE urls ADD COLUMN source TEXT");
+    } catch (PDOException $e) {
+        // Column already exists, ignore
+    }
+
     // Create search logs table (optional)
 
     $db->exec("CREATE TABLE IF NOT EXISTS search_logs (
