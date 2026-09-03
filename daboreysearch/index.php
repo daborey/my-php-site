@@ -308,25 +308,64 @@ $total_urls = count_urls();
 
     <div class="container">
 
-        <!-- Header -->
+        <?php if (isset($_GET['deleted'])): ?>
+            <div style="background: #064e3b; border: 1px solid #065f46; color: #6ee7b7; padding: 12px 18px; border-radius: 6px; margin-bottom: 20px;">
+                ✅ Deleted all URLs from: <strong><?php echo htmlspecialchars($_GET['deleted']); ?></strong>
+            </div>
+        <?php endif; ?>
+
         <header>
             <div class="logo">
                 <h1>🔍 <?php echo $site_name; ?></h1>
                 <small>Search any URL</small>
             </div>
+
+
             <div class="stats">
                 👤 <?php echo htmlspecialchars($_SESSION['search_username'] ?? 'User'); ?>
                 <a href="/daboreysearch/logout.php" style="color:#ef4444; text-decoration:none; margin-left:10px; font-weight:bold;">Logout</a>
                 &nbsp;|&nbsp;
                 📄 <span><?php echo number_format($total_urls); ?></span> URLs indexed
             </div>
+
+            <!-- Sources Section -->
+            <?php
+            $sources = get_all_sources();
+            if (!empty($sources)):
+            ?>
+                <div style="margin: 15px 0; background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                        <span style="color: #94a3b8; font-size: 13px;">📂 Sources:</span>
+                        <?php foreach ($sources as $source): ?>
+                            <div style="display: flex; align-items: center; gap: 5px; background: #0f172a; padding: 4px 10px; border-radius: 4px;">
+                                <a href="?<?php echo http_build_query(['q' => $keyword, 'source' => $source['source']]); ?>" style="color: #38bdf8; text-decoration: none; font-size: 13px;">
+                                    <?php echo htmlspecialchars($source['source']); ?>
+                                    <small style="color:#64748b;">(<?php echo $source['count']; ?>)</small>
+                                </a>
+                                <a href="/daboreysearch/delete_source.php?source=<?php echo urlencode($source['source']); ?>&csrf_token=<?php echo csrf_token(); ?>"
+                                    onclick="return confirm('Delete all URLs from <?php echo htmlspecialchars($source['source']); ?>?');"
+                                    style="color: #ef4444; text-decoration: none; font-size: 12px; font-weight: bold;">✕</a>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
         </header>
 
         <!-- Search Box -->
         <div class="search-container">
             <form method="GET" action="/daboreysearch/index.php">
                 <div class="search-box">
-                    <input type="text" name="q" placeholder="Search for URLs... (e.g., football, article, note)" value="<?php echo htmlspecialchars($keyword); ?>" autofocus>
+                    <input
+                        type="text"
+                        name="q"
+                        placeholder="Search for URLs... (e.g., football, software, download)"
+                        value="<?php echo htmlspecialchars($keyword); ?>"
+                        autofocus>
+                    <?php if (!empty($source_filter)): ?>
+                        <input type="hidden" name="source" value="<?php echo htmlspecialchars($source_filter); ?>">
+                    <?php endif; ?>
                     <button type="submit">Search</button>
                 </div>
             </form>
@@ -340,7 +379,12 @@ $total_urls = count_urls();
         <!-- Results -->
         <?php if (!empty($keyword)) : ?>
             <div class="results-header">
-                <h2>Results for "<?php echo htmlspecialchars($keyword); ?>"</h2>
+                <h2>
+                    Results for "<?php echo htmlspecialchars($keyword); ?>"
+                    <?php if (!empty($source_filter)): ?>
+                        <small style="color:#94a3b8; font-weight:normal;">in <?php echo htmlspecialchars($source_filter); ?></small>
+                    <?php endif; ?>
+                </h2>
                 <span class="count"><?php echo $total_results; ?> found</span>
             </div>
 
@@ -352,6 +396,11 @@ $total_urls = count_urls();
                                 <?php echo htmlspecialchars($url['title'] ?: 'Untitled'); ?>
                             </a>
                             <div class="url"><?php echo htmlspecialchars($url['url']); ?></div>
+                            <div>
+                                <span style="display:inline-block; background:#0f172a; color:#94a3b8; font-size:11px; padding:2px 8px; border-radius:4px; margin-top:6px;">
+                                    📂 <?php echo htmlspecialchars($url['source'] ?? 'Unknown'); ?>
+                                </span>
+                            </div>
                             <div class="meta">
                                 Indexed: <span><?php echo date('M d, Y', strtotime($url['crawled_at'])); ?></span>
                             </div>
@@ -376,8 +425,11 @@ $total_urls = count_urls();
                 <h3>🔥 Recent Searches</h3>
                 <div class="tags">
                     <?php foreach ($recent as $item) : ?>
-                        <a href="?q=<?php echo urlencode($item['keyword']); ?>" class="tag">
+                        <a href="?q=<?php echo urlencode($item['keyword']); ?><?php echo !empty($item['source']) ? '&source=' . urlencode($item['source']) : ''; ?>" class="tag">
                             <?php echo htmlspecialchars($item['keyword']); ?>
+                            <?php if (!empty($item['source'])): ?>
+                                <small style="color:#64748b;">in <?php echo htmlspecialchars($item['source']); ?></small>
+                            <?php endif; ?>
                             <small style="color:#64748b;">(<?php echo $item['results_count']; ?>)</small>
                         </a>
                     <?php endforeach; ?>

@@ -56,7 +56,10 @@ function crawl_website($start_url, $max_pages = 100)
         }
 
         // Save URL to database
-        add_url($current_url, $title);
+
+        // Get source domain from start URL
+        $source_domain = parse_url($start_url, PHP_URL_HOST);
+        add_url($current_url, $title, $source_domain);
         echo "✅ Saved: " . ($title ?: $current_url) . "\n";
 
         // Extract all links
@@ -194,6 +197,11 @@ function crawl_website($start_url, $max_pages = 100)
 <body>
 
     <div class="container">
+        <?php if (isset($_GET['cleared'])): ?>
+            <div style="background: #7f1d1d; border: 1px solid #991b1b; color: #fca5a5; padding: 12px 18px; border-radius: 6px; margin-bottom: 20px;">
+                ✅ All URLs have been deleted from the database.
+            </div>
+        <?php endif; ?>
         <h1>🕷️ URL Crawler</h1>
         <p class="info">Enter a URL to start crawling. The crawler will find and save all internal links.</p>
 
@@ -230,6 +238,8 @@ function crawl_website($start_url, $max_pages = 100)
         <a href="index.php" class="back-link">← Back to Search</a>
         <br>
         <a href="/daboreysearch/logout.php" style="color:#ef4444; text-decoration:none; margin-top:10px; display:inline-block;">🚪 Logout</a>
+        <br><br>
+        <a href="?clear=yes" onclick="return confirm('⚠️ Delete ALL crawled URLs from ALL sources? This cannot be undone!');" style="color:#ef4444; text-decoration:none; font-weight:bold; border:1px solid #ef4444; padding:8px 16px; border-radius:4px; display:inline-block; margin-top:10px;">🗑️ Clear All Data</a>
         <br>
         <a href="?pass=<?php echo $crawl_password; ?>" class="back-link" style="color:#64748b;">🔄 Reset</a>
     </div>

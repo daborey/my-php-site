@@ -24,22 +24,28 @@ try {
     $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     
     // Create URLs table
+
     $db->exec("CREATE TABLE IF NOT EXISTS urls (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         url TEXT NOT NULL UNIQUE,
         title TEXT,
+        source TEXT,
         crawled_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
-    
+
     // Create search logs table (optional)
+
     $db->exec("CREATE TABLE IF NOT EXISTS search_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         keyword TEXT,
+        source TEXT,
         ip_address TEXT,
         results_count INTEGER,
         searched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
-    
+
+ 
+
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
