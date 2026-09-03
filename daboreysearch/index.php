@@ -292,7 +292,7 @@ $total_urls = count_urls();
     
     <!-- Search Box -->
     <div class="search-container">
-        <form method="GET" action="index.php">
+        <form method="GET" action="/daboreysearch/index.php">
             <div class="search-box">
                 <input 
                     type="text" 
