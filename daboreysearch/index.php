@@ -17,6 +17,7 @@ if (!isset($_SESSION['search_user_id'])) {
 
 
 $keyword = $_GET['q'] ?? '';
+$source_filter = $_GET['source'] ?? '';
 $results = [];
 $total_results = 0;
 
@@ -25,7 +26,11 @@ if (!empty($keyword)) {
     if (!check_search_rate_limit()) {
         $error = "Too many search attempts. Please wait a few minutes.";
     } else {
-        $results = search_urls($keyword);
+        if (!empty($source_filter)) {
+            $results = search_urls($keyword, $source_filter);
+        } else {
+            $results = search_urls($keyword);
+        }
         $total_results = count($results);
     }
 }
