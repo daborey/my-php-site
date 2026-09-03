@@ -5,22 +5,24 @@
 require_once 'config.php';
 
 // Get all URLs from database
-function get_all_urls() {
+function get_all_urls()
+{
     global $db;
     $stmt = $db->query("SELECT id, url, title, crawled_at FROM urls ORDER BY id DESC");
     return $stmt->fetchAll();
 }
 
 // Search URLs by keyword
-function search_urls($keyword, $source = '') {
+function search_urls($keyword, $source = '')
+{
     global $db;
-    
+
     if (empty($keyword)) {
         return [];
     }
-    
+
     $search_term = '%' . $keyword . '%';
-    
+
     if (!empty($source)) {
         $stmt = $db->prepare("
             SELECT id, url, title, source, crawled_at 
@@ -38,24 +40,25 @@ function search_urls($keyword, $source = '') {
         ");
         $stmt->execute([$search_term, $search_term]);
     }
-    
+
     $results = $stmt->fetchAll();
-    
+
     // Log the search
     log_search($keyword, $source, count($results));
-    
+
     return $results;
 }
 
 // Log search activity
-function log_search($keyword, $source, $results_count) {
+function log_search($keyword, $source, $results_count)
+{
     global $db;
     try {
         $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
         if (strpos($ip_address, ',') !== false) {
             $ip_address = trim(explode(',', $ip_address)[0]);
         }
-        $stmt = $db->prepare("INSERT INTO search_logs (keyword, source, ip_address, results_count) VALUES (?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO search_logs (keyword, source, ip_address, results_count) VALUES (?, ?, ?, ?)");
         $stmt->execute([$keyword, $source, $ip_address, $results_count]);
     } catch (Exception $e) {
         // Silent fail for logging
@@ -64,7 +67,8 @@ function log_search($keyword, $source, $results_count) {
 
 // Add URL to database (skip duplicates)
 
-function add_url($url, $title = '', $source = '') {
+function add_url($url, $title = '', $source = '')
+{
     global $db;
     try {
         $stmt = $db->prepare("INSERT OR IGNORE INTO urls (url, title, source) VALUES (?, ?, ?)");
@@ -75,7 +79,8 @@ function add_url($url, $title = '', $source = '') {
 }
 
 // Count total URLs
-function count_urls() {
+function count_urls()
+{
     global $db;
     $stmt = $db->query("SELECT COUNT(*) as total FROM urls");
     $result = $stmt->fetch();
@@ -83,19 +88,22 @@ function count_urls() {
 }
 
 // Clear all URLs (optional)
-function clear_urls() {
+function clear_urls()
+{
     global $db;
     $db->exec("DELETE FROM urls");
 }
 // Get all unique sources with count
-function get_all_sources() {
+function get_all_sources()
+{
     global $db;
     $stmt = $db->query("SELECT DISTINCT source, COUNT(*) as count FROM urls WHERE source IS NOT NULL AND source != '' GROUP BY source ORDER BY source");
     return $stmt->fetchAll();
 }
 
 // Delete all URLs from a specific source
-function delete_source($source) {
+function delete_source($source)
+{
     global $db;
     try {
         $stmt = $db->prepare("DELETE FROM urls WHERE source = ?");
@@ -106,7 +114,8 @@ function delete_source($source) {
 }
 
 // Get recent searches
-function get_recent_searches($limit = 10) {
+function get_recent_searches($limit = 10)
+{
     global $db;
     $stmt = $db->prepare("
         SELECT keyword, source, results_count, searched_at 
@@ -117,5 +126,3 @@ function get_recent_searches($limit = 10) {
     $stmt->execute([$limit]);
     return $stmt->fetchAll();
 }
-
-?>
