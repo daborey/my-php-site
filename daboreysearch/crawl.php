@@ -38,11 +38,8 @@ if ($auto_mode && !empty($auto_url)) {
     exit;
 }
 
-// ===== CRAWL PASSWORD =====
-$crawl_password = 'crawl123'; // CHANGE THIS!
-
-
-
+// ===== NO PASSWORD NEEDED - LOGIN ONLY =====
+// Access is already protected by the login check above.
 
 // Function to crawl a website
 function crawl_website($start_url, $max_pages = 100)
@@ -56,7 +53,6 @@ function crawl_website($start_url, $max_pages = 100)
         $current_url = array_shift($queue);
         $current_url = trim($current_url);
 
-        // Skip if already visited or empty
         if (empty($current_url) || isset($visited[$current_url])) {
             continue;
         }
@@ -66,32 +62,25 @@ function crawl_website($start_url, $max_pages = 100)
 
         echo "🔄 Crawling: $current_url\n";
 
-        // Fetch page content
         $html = @file_get_contents($current_url);
         if ($html === false) {
             echo "❌ Failed to fetch: $current_url\n";
             continue;
         }
 
-        // Extract title
         $title = '';
         if (preg_match('/<title>(.*?)<\/title>/i', $html, $matches)) {
             $title = trim($matches[1]);
         }
 
-        // Save URL to database
-
-        // Get source domain from start URL
         $source_domain = parse_url($start_url, PHP_URL_HOST);
         add_url($current_url, $title, $source_domain);
         echo "✅ Saved: " . ($title ?: $current_url) . "\n";
 
-        // Extract all links
         preg_match_all('/<a\s+href=["\']([^"\']*)["\']/i', $html, $matches);
         $links = $matches[1];
 
         foreach ($links as $link) {
-            // Convert relative to absolute
             if (strpos($link, 'http') !== 0) {
                 if (strpos($link, '/') === 0) {
                     $parsed = parse_url($current_url);
@@ -104,23 +93,19 @@ function crawl_website($start_url, $max_pages = 100)
                 }
             }
 
-            // Only crawl same domain (optional - remove to crawl all)
             $parsed_current = parse_url($current_url);
             $parsed_link = parse_url($link);
 
             if (isset($parsed_link['host']) && $parsed_link['host'] !== $parsed_current['host']) {
-                // Skip external domains
                 continue;
             }
 
-            // Add to queue if not visited
             if (!isset($visited[$link]) && !in_array($link, $queue)) {
                 $queue[] = $link;
             }
         }
 
-        // Delay to be nice to server
-        usleep(100000); // 0.1 second
+        usleep(100000);
     }
 
     return $count;
@@ -157,14 +142,6 @@ function crawl_website($start_url, $max_pages = 100)
 
         .info {
             color: #94a3b8;
-        }
-
-        .success {
-            color: #4ade80;
-        }
-
-        .error {
-            color: #f87171;
         }
 
         .form-group {
@@ -249,7 +226,6 @@ function crawl_website($start_url, $max_pages = 100)
             echo "📄 Max pages: $max_pages\n";
             echo str_repeat('-', 40) . "\n";
 
-            // Start crawling
             $crawled = crawl_website($start_url, $max_pages);
 
             echo str_repeat('-', 40) . "\n";
@@ -264,8 +240,6 @@ function crawl_website($start_url, $max_pages = 100)
         <a href="/daboreysearch/logout.php" style="color:#ef4444; text-decoration:none; margin-top:10px; display:inline-block;">🚪 Logout</a>
         <br><br>
         <a href="?clear=yes" onclick="return confirm('⚠️ Delete ALL crawled URLs from ALL sources? This cannot be undone!');" style="color:#ef4444; text-decoration:none; font-weight:bold; border:1px solid #ef4444; padding:8px 16px; border-radius:4px; display:inline-block; margin-top:10px;">🗑️ Clear All Data</a>
-        <br>
-        <a href="?pass=<?php echo $crawl_password; ?>" class="back-link" style="color:#64748b;">🔄 Reset</a>
     </div>
 
 </body>
