@@ -8,8 +8,6 @@ require_once 'security.php';
 
 // ===== LOGIN CHECK =====
 if (!isset($_SESSION['search_user_id'])) {
-
-
     header("Location: /daboreysearch/login.php");
     exit;
 }
@@ -118,7 +116,7 @@ $total_urls = count_urls();
 
         /* Search Box */
         .search-container {
-            margin-bottom: 30px;
+            margin-bottom: 15px;
         }
 
         /* Quick Crawl Form */
@@ -220,6 +218,15 @@ $total_urls = count_urls();
 
         .search-box button:hover {
             background: #0369a1;
+        }
+
+        .success {
+            background: #064e3b;
+            border: 1px solid #065f46;
+            color: #6ee7b7;
+            padding: 12px 18px;
+            border-radius: 6px;
+            margin-bottom: 20px;
         }
 
         /* Results */
@@ -392,14 +399,17 @@ $total_urls = count_urls();
             </div>
         <?php endif; ?>
 
-        <?php if (isset($_GET['crawled'])): ?> <div class="success"> ✅ Crawl completed! <strong><?php echo htmlspecialchars($_GET['crawled']); ?></strong> pages indexed from: <strong><?php echo htmlspecialchars($_GET['source'] ?? ''); ?></strong> </div> <?php endif; ?>
+        <?php if (isset($_GET['crawled'])): ?>
+            <div class="success">
+                ✅ Crawl completed! <strong><?php echo htmlspecialchars($_GET['crawled']); ?></strong> pages indexed from: <strong><?php echo htmlspecialchars($_GET['source'] ?? ''); ?></strong>
+            </div>
+        <?php endif; ?>
 
         <header>
             <div class="logo">
                 <h1>🔍 <?php echo $site_name; ?></h1>
                 <small>Search any URL</small>
             </div>
-
 
             <div class="stats">
                 👤 <?php echo htmlspecialchars($_SESSION['search_username'] ?? 'User'); ?>
@@ -413,7 +423,7 @@ $total_urls = count_urls();
             $sources = get_all_sources();
             if (!empty($sources)):
             ?>
-                <div style="margin: 15px 0; background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155;">
+                <div style="margin: 15px 0; background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; width: 100%;">
                     <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
                         <span style="color: #94a3b8; font-size: 13px;">📂 Sources:</span>
                         <?php foreach ($sources as $source): ?>
@@ -453,8 +463,14 @@ $total_urls = count_urls();
 
         <!-- Quick Crawl Form -->
         <div class="crawl-form">
-            <form method="POST" action="/daboreysearch/index.php"> <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>"> <input type="hidden" name="action" value="crawl_now">
-                <div class="form-row"> <input type="url" name="crawl_url" placeholder="Enter URL to crawl (e.g., https://example.com)" required> <button type="submit" class="btn-crawl">➕ Add & Crawl</button> </div> <small class="hint">Crawls up to 100 pages from the website. URLs are saved with source = domain name.</small>
+            <form method="POST" action="/daboreysearch/index.php">
+                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
+                <input type="hidden" name="action" value="crawl_now">
+                <div class="form-row">
+                    <input type="url" name="crawl_url" placeholder="Enter URL to crawl (e.g., https://example.com)" required>
+                    <button type="submit" class="btn-crawl">➕ Add & Crawl</button>
+                </div>
+                <small class="hint">Crawls up to 100 pages from the website. URLs are saved with source = domain name.</small>
             </form>
         </div>
 
