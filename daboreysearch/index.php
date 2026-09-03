@@ -54,7 +54,7 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-$total_urls = count_urls();
+$total_urls = function_exists('count_urls') ? count_urls() : 0;
 ?>
 <!DOCTYPE html>
 <html lang="km">
@@ -420,7 +420,7 @@ $total_urls = count_urls();
 
             <!-- Sources Section -->
             <?php
-            $sources = get_all_sources();
+            $sources = function_exists('get_all_sources') ? get_all_sources() : [];
             if (!empty($sources)):
             ?>
                 <div style="margin: 15px 0; background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; width: 100%;">
@@ -525,7 +525,7 @@ $total_urls = count_urls();
 
         <!-- Recent Searches -->
         <?php
-        $recent = get_recent_searches(10);
+        $recent = function_exists('get_recent_searches') ? get_recent_searches(10) : [];
         if (!empty($recent)) :
         ?>
             <div class="recent-searches">

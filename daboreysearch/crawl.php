@@ -12,6 +12,13 @@ if (!isset($_SESSION['search_user_id'])) {
     exit;
 }
 
+// ===== HANDLE CLEAR ALL DATA =====
+if (isset($_GET['clear']) && $_GET['clear'] === 'yes') {
+    clear_urls();
+    header("Location: /daboreysearch/crawl.php?cleared=1");
+    exit;
+}
+
 // ===== AUTO-CRAWL FROM INDEX =====
 $auto_url = $_GET['url'] ?? '';
 $auto_mode = isset($_GET['auto']) && $_GET['auto'] == 1;
@@ -62,7 +69,14 @@ function crawl_website($start_url, $max_pages = 100)
 
         echo "🔄 Crawling: $current_url\n";
 
-        $html = @file_get_contents($current_url);
+       $options = [
+            'http' => [
+                'method' => "GET",
+                'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36\r\n"
+            ]
+        ];
+        $context = stream_context_create($options);
+        $html = @file_get_contents($current_url, false, $context);
         if ($html === false) {
             echo "❌ Failed to fetch: $current_url\n";
             continue;
