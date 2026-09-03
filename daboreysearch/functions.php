@@ -48,19 +48,6 @@ function search_urls($keyword, $source = '') {
 }
 
 // Log search activity
-function log_search($keyword, $results_count) {
-    global $db;
-    try {
-        $ip_address = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
-        if (strpos($ip_address, ',') !== false) {
-            $ip_address = trim(explode(',', $ip_address)[0]);
-        }
-        $stmt = $db->prepare("INSERT INTO search_logs (keyword, ip_address, results_count) VALUES (?, ?, ?)");
-        $stmt->execute([$keyword, $ip_address, $results_count]);
-    } catch (Exception $e) {
-        // Silent fail for logging
-    }
-}
 function log_search($keyword, $source, $results_count) {
     global $db;
     try {
@@ -77,15 +64,6 @@ function log_search($keyword, $source, $results_count) {
 
 // Add URL to database (skip duplicates)
 
-function add_url($url, $title = '') {
-    global $db;
-    try {
-        $stmt = $db->prepare("INSERT OR IGNORE INTO urls (url, title) VALUES (?, ?)");
-        return $stmt->execute([$url, $title]);
-    } catch (PDOException $e) {
-        return false;
-    }
-}
 function add_url($url, $title = '', $source = '') {
     global $db;
     try {
@@ -140,5 +118,4 @@ function get_recent_searches($limit = 10) {
     return $stmt->fetchAll();
 }
 
-//
 ?>
