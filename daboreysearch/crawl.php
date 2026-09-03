@@ -38,6 +38,12 @@ if ($auto_mode && !empty($auto_url)) {
     exit;
 }
 
+// ===== CRAWL PASSWORD =====
+$crawl_password = 'crawl123'; // CHANGE THIS!
+
+
+
+
 // Function to crawl a website
 function crawl_website($start_url, $max_pages = 100)
 {
