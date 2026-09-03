@@ -25,7 +25,6 @@ try {
     $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     
     // Create URLs table
-
     $db->exec("CREATE TABLE IF NOT EXISTS urls (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         url TEXT NOT NULL UNIQUE,
@@ -34,15 +33,14 @@ try {
         crawled_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
-    // Auto-migrate missing 'source' column
+    // Auto-migrate missing 'source' column in urls
     try {
         $db->exec("ALTER TABLE urls ADD COLUMN source TEXT");
     } catch (PDOException $e) {
-        // Column already exists, ignore
+        // Column already exists, safe to ignore
     }
 
     // Create search logs table (optional)
-
     $db->exec("CREATE TABLE IF NOT EXISTS search_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         keyword TEXT,
@@ -52,7 +50,12 @@ try {
         searched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
- 
+    // Auto-migrate missing 'source' column in search_logs
+    try {
+        $db->exec("ALTER TABLE search_logs ADD COLUMN source TEXT");
+    } catch (PDOException $e) {
+        // Column already exists, safe to ignore
+    }
 
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
