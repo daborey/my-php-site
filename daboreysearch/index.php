@@ -64,7 +64,7 @@ $total_urls = function_exists('count_urls') ? count_urls() : 0;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Da Borey Search</title>
+    <title>Da Borey Search search</title>
     <style>
         /* ===== YOUR STYLE ===== */
         body {
