@@ -12,6 +12,11 @@ if (!isset($_SESSION['search_user_id'])) {
     exit;
 }
 
+// ===== INITIALIZE CSRF TOKEN FIRST =====
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $keyword = $_GET['q'] ?? '';
 $source_filter = $_GET['source'] ?? '';
 $results = [];
@@ -49,10 +54,7 @@ if (!empty($keyword)) {
     }
 }
 
-// Initialize CSRF token
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+
 
 $total_urls = function_exists('count_urls') ? count_urls() : 0;
 ?>
