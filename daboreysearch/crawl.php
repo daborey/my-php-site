@@ -2,8 +2,20 @@
 // ============================================
 // FILE: daboreysearch/crawl.php
 // ============================================
-ini_set('max_execution_time', 300); // Allow script to run up to 5 minutes
-ini_set('memory_limit', '256M');     // Increase memory limit for larger queues
+ini_set('max_execution_time', 300);
+ini_set('memory_limit', '256M');
+
+// Force continuous streaming output to prevent proxy/server timeouts
+if (function_exists('apache_setenv')) {
+    @apache_setenv('no-gzip', '1');
+}
+@ini_set('zlib.output_compression', '0');
+@ini_set('implicit_flush', '1');
+for ($i = 0; $i < ob_get_level(); $i++) {
+    ob_end_flush();
+}
+ob_implicit_flush(true);
+
 require_once 'config.php';
 require_once 'functions.php';
 require_once 'security.php';
@@ -199,6 +211,10 @@ function crawl_website($start_url, $max_pages = 500)
 
         // Polite rate-limiting delay between requests (100ms)
         usleep(100000);
+
+        // Send output immediately to browser to keep connection alive
+        if (ob_get_level() > 0) ob_flush();
+        flush();
     }
 
     return $count;
