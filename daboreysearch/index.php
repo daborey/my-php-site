@@ -470,7 +470,7 @@ $total_urls = function_exists('count_urls') ? count_urls() : 0;
                     <input type="url" name="crawl_url" placeholder="Enter URL to crawl (e.g., https://example.com)" required>
                     <button type="submit" class="btn-crawl">➕ Add & Crawl</button>
                 </div>
-                <small class="hint">Crawls up to 100 pages from the website. URLs are saved with source = domain name.</small>
+                <small class="hint">Crawls up to 500 pages from the website. URLs are saved with source = domain name.</small>
             </form>
         </div>
 

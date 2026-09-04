@@ -2,6 +2,8 @@
 // ============================================
 // FILE: daboreysearch/crawl.php
 // ============================================
+ini_set('max_execution_time', 300); // Allow script to run up to 5 minutes
+ini_set('memory_limit', '256M');     // Increase memory limit for larger queues
 require_once 'config.php';
 require_once 'functions.php';
 require_once 'security.php';
@@ -30,11 +32,11 @@ if ($auto_mode && !empty($auto_url)) {
     echo '<div class="output">';
     echo "🔄 Starting crawl from index page...\n";
     echo "📍 Target: $auto_url\n";
-    echo "📄 Max pages: 100\n";
+    echo "📄 Max pages: 500\n";
     echo str_repeat('-', 40) . "\n";
-    
-    $crawled = crawl_website($auto_url, 100);
-    
+
+    $crawled = crawl_website($auto_url, 500);
+
     echo str_repeat('-', 40) . "\n";
     echo "✅ Crawl complete!\n";
     echo "📊 Total pages crawled: $crawled\n";
@@ -45,11 +47,72 @@ if ($auto_mode && !empty($auto_url)) {
     exit;
 }
 
-// ===== NO PASSWORD NEEDED - LOGIN ONLY =====
-// Access is already protected by the login check above.
+// ===== HELPER FUNCTIONS =====
 
-// Function to crawl a website
-function crawl_website($start_url, $max_pages = 100)
+/**
+ * Checks if a URL is allowed by the domain's robots.txt rules.
+ */
+function is_url_allowed_by_robots($url)
+{
+    static $robots_cache = [];
+
+    $parsed = parse_url($url);
+    if (!isset($parsed['scheme'], $parsed['host'])) {
+        return true;
+    }
+
+    $domain = $parsed['scheme'] . '://' . $parsed['host'];
+
+    // Cache robots.txt content per domain to avoid re-fetching
+    if (!isset($robots_cache[$domain])) {
+        $robots_url = $domain . '/robots.txt';
+        $context = stream_context_create([
+            'http' => [
+                'user_agent' => 'DaBoreySearchBot/1.0 (+https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ')',
+                'timeout' => 3
+            ]
+        ]);
+
+        $content = @file_get_contents($robots_url, false, $context);
+        $disallowed = [];
+
+        if ($content !== false) {
+            $lines = explode("\n", $content);
+            $applies = true;
+
+            foreach ($lines as $line) {
+                $line = trim(preg_replace('/#.*/', '', $line));
+                if (empty($line)) continue;
+
+                if (stripos($line, 'User-agent:') === 0) {
+                    $agent = trim(substr($line, 11));
+                    $applies = ($agent === '*' || stripos($agent, 'DaBoreySearch') !== false);
+                } elseif ($applies && stripos($line, 'Disallow:') === 0) {
+                    $rule = trim(substr($line, 9));
+                    if ($rule !== '') {
+                        $disallowed[] = $rule;
+                    }
+                }
+            }
+        }
+        $robots_cache[$domain] = $disallowed;
+    }
+
+    $path = $parsed['path'] ?? '/';
+
+    foreach ($robots_cache[$domain] as $rule) {
+        if ($rule === '/' || str_starts_with($path, $rule)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Main function to crawl web pages starting from a given URL
+ */
+function crawl_website($start_url, $max_pages = 500)
 {
     $urls = [];
     $visited = [];
@@ -65,14 +128,29 @@ function crawl_website($start_url, $max_pages = 100)
         }
 
         $visited[$current_url] = true;
+
+        // 1. Check robots.txt compliance before hitting the server
+        if (!is_url_allowed_by_robots($current_url)) {
+            echo "⚠️ Skipped (Blocked by robots.txt): $current_url\n";
+            continue;
+        }
+
+        // 2. Skip non-HTML links (images, archives, media files) by URL extension
+        $path_extension = strtolower(pathinfo(parse_url($current_url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
+        if (in_array($path_extension, ['pdf', 'zip', 'rar', 'exe', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'mp4', 'mp3', 'css', 'js', 'json'])) {
+            echo "⚠️ Skipped (Non-HTML File): $current_url\n";
+            continue;
+        }
+
         $count++;
 
         echo "🔄 Crawling: $current_url\n";
 
-       $options = [
+        // Transparent User-Agent header for courteous request identification
+        $options = [
             'http' => [
                 'method' => "GET",
-                'header' => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36\r\n"
+                'header' => "User-Agent: DaBoreySearchBot/1.0 (+https://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ")\r\n"
             ]
         ];
         $context = stream_context_create($options);
@@ -119,6 +197,7 @@ function crawl_website($start_url, $max_pages = 100)
             }
         }
 
+        // Polite rate-limiting delay between requests (100ms)
         usleep(100000);
     }
 
@@ -225,14 +304,14 @@ function crawl_website($start_url, $max_pages = 100)
                 <input type="url" name="start_url" placeholder="https://yoursite.com" required>
             </div>
             <div class="form-group">
-                <label>Max pages: <input type="number" name="max_pages" value="100" min="1" max="1000" style="width:80px; background:#0f172a; border:1px solid #334155; color:white; padding:6px;"></label>
+                <label>Max pages: <input type="number" name="max_pages" value="500" min="1" max="1000" style="width:80px; background:#0f172a; border:1px solid #334155; color:white; padding:6px;"></label>
             </div>
             <button type="submit">🚀 Start Crawl</button>
         </form>
 
         <?php if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['start_url'])) :
             $start_url = $_POST['start_url'];
-            $max_pages = (int)($_POST['max_pages'] ?? 100);
+            $max_pages = (int)($_POST['max_pages'] ?? 500);
 
             echo '<div class="output">';
             echo "🔄 Starting crawl...\n";
