@@ -72,7 +72,7 @@ function resolve_url(string $relative_url, string $base_url): ?string {
 function fetch_webpage_content(string $url): string|false {
     $user_agent = 'DaBoreySearchBot/1.0 (+https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/bot)';
 
-    // Condition 1: Use cURL if enabled (handles modern SSL, redirects, and headers better)
+    // Condition 1: Use cURL if enabled
     if (function_exists('curl_init')) {
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -84,7 +84,7 @@ function fetch_webpage_content(string $url): string|false {
             CURLOPT_USERAGENT      => $user_agent,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_ENCODING       => '', // Accept all encodings (gzip/deflate)
+            CURLOPT_ENCODING       => '', 
         ]);
         $content = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -125,14 +125,14 @@ function is_url_allowed_by_robots(string $url): bool {
     $robots_txt = fetch_webpage_content($robots_url);
 
     if ($robots_txt === false || empty($robots_txt)) {
-        return true; // Assume allowed if robots.txt doesn't exist
+        return true; 
     }
 
     $path = $parsed['path'] ?? '/';
     $user_agent_section = false;
 
     foreach (explode("\n", $robots_txt) as $line) {
-        $line = trim(preg_replace('/#.*/', '', $line)); // Remove comments
+        $line = trim(preg_replace('/#.*/', '', $line)); 
         if (empty($line)) continue;
 
         if (preg_match('/^User-agent:\s*(.*)$/i', $line, $matches)) {
@@ -156,7 +156,12 @@ function is_url_allowed_by_robots(string $url): bool {
  * Main Crawler Logic
  */
 function crawl_website(string $start_url, int $max_pages = 500): int {
-    global $pdo;
+    global $db; // Changed $pdo to $db to match config.php
+
+    if (!$db) {
+        echo "❌ Database connection failure. Variable \$db is not set.<br>";
+        return 0;
+    }
 
     $queue = [$start_url];
     $visited = [];
@@ -173,7 +178,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
     while (!empty($queue) && $count < $max_pages) {
         $current_url = array_shift($queue);
 
-        // Normalize URL to eliminate duplicate query parameters or anchor variations
+        // Normalize URL
         $current_url = strtok($current_url, '#');
 
         if (isset($visited[$current_url])) {
@@ -181,7 +186,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         }
         $visited[$current_url] = true;
 
-        // Skip non-HTML files based on extension
+        // Skip non-HTML files
         if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url)) {
             continue;
         }
@@ -200,13 +205,13 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             continue;
         }
 
-        // Parse HTML safely with DOMDocument
+        // Parse HTML
         $dom = new DOMDocument();
         libxml_use_internal_errors(true);
         @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
         libxml_clear_errors();
 
-        // Extract <title> tag safely
+        // Extract <title>
         $title = '';
         $title_nodes = $dom->getElementsByTagName('title');
         if ($title_nodes->length > 0) {
@@ -216,13 +221,13 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             $title = 'Untitled Page (' . parse_url($current_url, PHP_URL_PATH) . ')';
         }
 
-        // Save into SQLite Database
+        // Save into SQLite Database (Mapped to 'urls' table in config.php)
         try {
-            $stmt = $pdo->prepare("INSERT OR REPLACE INTO pages (url, title, domain, updated_at) VALUES (:url, :title, :domain, CURRENT_TIMESTAMP)");
+            $stmt = $db->prepare("INSERT INTO urls (url, title, source, crawled_at) VALUES (:url, :title, :source, CURRENT_TIMESTAMP) ON CONFLICT(url) DO UPDATE SET title = :title, source = :source, crawled_at = CURRENT_TIMESTAMP");
             $stmt->execute([
                 ':url'    => $current_url,
                 ':title'  => $title,
-                ':domain' => $base_domain
+                ':source' => $base_domain
             ]);
             $count++;
             echo "✅ Saved: " . htmlspecialchars($title) . "<br>";
@@ -230,7 +235,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             echo "⚠️ Database Error: " . htmlspecialchars($e->getMessage()) . "<br>";
         }
 
-        // Check for HTML <base href="..."> tags that alter link paths
+        // Check for HTML <base href="...">
         $effective_base_url = $current_url;
         $base_nodes = $dom->getElementsByTagName('base');
         if ($base_nodes->length > 0 && $base_nodes->item(0)->hasAttribute('href')) {
@@ -241,7 +246,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             }
         }
 
-        // Extract and resolve all internal <a> links
+        // Extract internal links
         $links = $dom->getElementsByTagName('a');
         foreach ($links as $link_node) {
             if (!$link_node->hasAttribute('href')) {
@@ -254,7 +259,6 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             if ($full_url) {
                 $link_domain = parse_url($full_url, PHP_URL_HOST) ?? '';
                 
-                // Stay within the same domain (BFS limit)
                 if (strcasecmp($link_domain, $base_domain) === 0 && !isset($visited[$full_url])) {
                     $queue[] = $full_url;
                 }
@@ -264,7 +268,6 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         // Rate-limiting delay (100ms)
         usleep(100000);
 
-        // Keep HTTP connection live for browser streaming output
         if (ob_get_level() > 0) ob_flush();
         flush();
     }
@@ -277,7 +280,6 @@ $start_url = $_GET['url'] ?? $_POST['url'] ?? '';
 $max_pages = isset($_GET['max']) ? (int)$_GET['max'] : 500;
 
 if (!empty($start_url)) {
-    // Ensure URL has a scheme prefix
     if (!preg_match('/^https?:\/\//i', $start_url)) {
         $start_url = 'https://' . $start_url;
     }
@@ -290,7 +292,7 @@ if (!empty($start_url)) {
 
     $total = crawl_website($start_url, $max_pages);
 
-    $db_count = $pdo->query("SELECT COUNT(*) FROM pages")->fetchColumn();
+    $db_count = $db->query("SELECT COUNT(*) FROM urls")->fetchColumn();
 
     echo "----------------------------------------<br>";
     echo "✅ <strong>Crawl complete!</strong><br>";
