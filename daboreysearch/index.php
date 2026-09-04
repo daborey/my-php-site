@@ -409,7 +409,11 @@ $total_urls = function_exists('count_urls') ? count_urls() : 0;
 
         <header>
             <div class="logo">
-                <h1>🔍 <?php echo $site_name; ?></h1>
+                <h1>
+                    <a href="/daboreysearch/index.php" style="color: #38bdf8; text-decoration: none;">
+                        🔍 <?php echo $site_name; ?>
+                    </a>
+                </h1>
                 <small>Search any URL</small>
             </div>
 
