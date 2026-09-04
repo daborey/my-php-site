@@ -173,7 +173,7 @@ function is_url_allowed_by_robots(string $url): bool {
 }
 
 /**
- * High-Speed Resumable Web Crawler Logic
+ * Resumable Web Crawler Logic
  */
 function crawl_website(string $start_url, int $max_pages = 500): int {
     global $db; 
@@ -204,7 +204,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
 
     $count = 0;
     $start_time = time();
-    $max_seconds = 280; // Safety threshold before server execution timeout
+    $max_seconds = 280; // Safety exit threshold before server timeout
 
     // Prepared statements
     $get_next_stmt  = $db->prepare("SELECT url FROM crawl_queue WHERE status = 'pending' LIMIT 1");
@@ -215,9 +215,9 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
     $db_count = $db->query("SELECT COUNT(*) FROM urls")->fetchColumn();
 
     while (($db_count + $count) < $max_pages) {
-        // Exit safely before server times out
+        // Exit safely before 300s timeout limit
         if ((time() - $start_time) >= $max_seconds) {
-            echo "<br>⏱️ <strong>Execution limit reached ({$max_seconds}s)! Saving queue state for auto-resume...</strong><br>";
+            echo "<br>⏱️ <strong>Execution limit reached ({$max_seconds}s)! Queue saved to database.</strong><br>";
             break;
         }
 
@@ -233,13 +233,13 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         // Mark current URL completed immediately
         $mark_done_stmt->execute([':url' => $current_url]);
 
-        // Filter non-HTML extensions and redundant pagination
+        // Skip non-HTML files and redundant patterns
         if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url) ||
             preg_match('/\/(page\/|tags\/|download\/.*\/download\/)/i', $current_url)) {
             continue;
         }
 
-        // Check robots.txt
+        // Verify robots.txt
         if (!is_url_allowed_by_robots($current_url)) {
             echo "⚠️ Skipped (Blocked by robots.txt): " . htmlspecialchars($current_url) . "<br>";
             continue;
@@ -259,7 +259,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
         libxml_clear_errors();
 
-        // Extract title
+        // Extract <title>
         $title = '';
         $title_nodes = $dom->getElementsByTagName('title');
         if ($title_nodes->length > 0) {
@@ -269,7 +269,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             $title = 'Untitled Page (' . parse_url($current_url, PHP_URL_PATH) . ')';
         }
 
-        // Save indexed page into DB
+        // Save into SQLite Database
         try {
             $save_url_stmt->execute([
                 ':url'    => $current_url,
@@ -282,7 +282,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             echo "⚠️ Database Error: " . htmlspecialchars($e->getMessage()) . "<br>";
         }
 
-        // Check for HTML base tag
+        // Check for base tag
         $effective_base_url = $current_url;
         $base_nodes = $dom->getElementsByTagName('base');
         if ($base_nodes->length > 0 && $base_nodes->item(0)->hasAttribute('href')) {
@@ -293,7 +293,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             }
         }
 
-        // Extract internal links into memory array
+        // Extract internal links into array
         $extracted_links = [];
         $links = $dom->getElementsByTagName('a');
         foreach ($links as $link_node) {
@@ -310,7 +310,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             }
         }
 
-        // Bulk insert extracted links in ONE SINGLE TRANSACTION to maximize SQLite speed
+        // Bulk transaction insert for optimal SQLite write speed
         if (!empty($extracted_links)) {
             $db->beginTransaction();
             foreach ($extracted_links as $link_to_add) {
@@ -319,7 +319,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             $db->commit();
         }
 
-        // Rate-limiting delay (50ms)
+        // Rate limiting (50ms)
         usleep(50000);
 
         if (ob_get_level() > 0) ob_flush();
@@ -339,7 +339,7 @@ if (!empty($start_url)) {
     }
 
     echo '<div style="font-family: monospace; background: #0f172a; color: #f8fafc; padding: 20px; border-radius: 8px; line-height: 1.6;">';
-    echo "🕷️ <strong>DaBoreySearch Engine Crawler (Resumable)</strong><br>";
+    echo "🕷️ <strong>DaBoreySearch Engine Crawler (Manual Resume)</strong><br>";
     echo "📍 Target: " . htmlspecialchars($start_url) . "<br>";
     echo "📄 Cap Limit: " . $max_pages . " pages<br>";
     echo "----------------------------------------<br>";
@@ -350,38 +350,25 @@ if (!empty($start_url)) {
     $queue_remaining = $db->query("SELECT COUNT(*) FROM crawl_queue WHERE status = 'pending'")->fetchColumn();
 
     echo "----------------------------------------<br>";
-    echo "✅ <strong>Run Complete!</strong><br>";
+    echo "✅ <strong>Batch Complete!</strong><br>";
     echo "📊 Pages crawled in this run: " . $total . "<br>";
     echo "📚 Total indexed URLs in DB: " . $db_count . "<br>";
     echo "⏳ Remaining URLs pending in queue: " . $queue_remaining . "<br>";
     echo "----------------------------------------<br>";
 
-    // Auto-continue if goal not met and queue still has pending URLs
+    // Manual resume option when batch hits time limit or cap limit isn't met yet
     if ($db_count < $max_pages && $queue_remaining > 0) {
         $next_url = "crawl.php?url=" . urlencode($start_url) . "&max=" . $max_pages;
         
-        echo "<div style='color: #facc15; font-weight: bold;' id='timer'>
-                ⏱️ Reached 280s batch limit. Automatically resuming next batch in 5 seconds...
-              </div>";
-        echo '<a href="index.php" style="color: #38bdf8; text-decoration: none;">[ Stop & Go Back to Search ]</a>';
-
-        echo "
-        <script>
-            let seconds = 5;
-            const timerElement = document.getElementById('timer');
-            const interval = setInterval(() => {
-                seconds--;
-                if (seconds > 0) {
-                    timerElement.innerText = '⏱️ Reached 280s batch limit. Automatically resuming next batch in ' + seconds + ' seconds...';
-                } else {
-                    clearInterval(interval);
-                    window.location.href = '$next_url';
-                }
-            }, 1000);
-        </script>";
+        echo "<div style='margin-top: 15px; padding: 15px; background: #1e293b; border-left: 4px solid #38bdf8; border-radius: 4px;'>";
+        echo "⏸️ <strong>Batch finished (280s limit reached).</strong><br>";
+        echo "You can continue crawling the remaining " . $queue_remaining . " pending URLs whenever you're ready:<br><br>";
+        echo '<a href="' . $next_url . '" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 10px 20px; font-weight: bold; text-decoration: none; border-radius: 6px; margin-right: 10px;">▶️ Resume Next 280s Batch</a>';
+        echo '<a href="index.php" style="color: #94a3b8; text-decoration: none;">[ Stop & Return to Search ]</a>';
+        echo "</div>";
     } else {
-        echo "🎉 <strong>Crawl finished! Target of {$max_pages} pages reached or queue empty.</strong><br>";
-        echo '<a href="index.php" style="color: #38bdf8; text-decoration: none;">← Back to Search</a>';
+        echo "🎉 <strong>Crawl finished! Target of {$max_pages} pages reached or queue empty.</strong><br><br>";
+        echo '<a href="index.php" style="display: inline-block; background: #334155; color: #f8fafc; padding: 8px 16px; text-decoration: none; border-radius: 6px;">← Back to Search</a>';
     }
 
     echo '</div>';
