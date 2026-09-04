@@ -25,9 +25,12 @@ register_shutdown_function(function() {
 require_once 'config.php';
 
 /**
- * Ensures the crawl_queue table exists for IDM-style persistent state tracking.
+ * Initializes queue table and enables WAL mode for high-performance SQLite I/O.
  */
 function init_queue_table(PDO $db): void {
+    $db->exec("PRAGMA journal_mode = WAL;");
+    $db->exec("PRAGMA synchronous = NORMAL;");
+
     $db->exec("CREATE TABLE IF NOT EXISTS crawl_queue (
         url TEXT PRIMARY KEY,
         status TEXT DEFAULT 'pending'
@@ -61,23 +64,23 @@ function resolve_url(string $relative_url, string $base_url): ?string {
         return $relative_url;
     }
 
-    // 2. Protocol-relative URL (e.g., //www.example.com/path)
+    // 2. Protocol-relative URL
     if (str_starts_with($relative_url, '//')) {
         return $scheme . ':' . $relative_url;
     }
 
-    // 3. Absolute path from host root (e.g., /software/security)
+    // 3. Absolute path from host root
     if (str_starts_with($relative_url, '/')) {
         return $scheme . '://' . $host . $port . $relative_url;
     }
 
-    // 4. Query string only (e.g., ?page=2)
+    // 4. Query string only
     if (str_starts_with($relative_url, '?')) {
         $path = $base_parts['path'] ?? '/';
         return $scheme . '://' . $host . $port . $path . $relative_url;
     }
 
-    // 5. Relative directory path (e.g., subcategory/page.html)
+    // 5. Relative directory path
     $path = $base_parts['path'] ?? '/';
     $dir  = rtrim(dirname($path), '/\\');
     $dir  = ($dir === '') ? '' : $dir;
@@ -91,7 +94,6 @@ function resolve_url(string $relative_url, string $base_url): ?string {
 function fetch_webpage_content(string $url): string|false {
     $user_agent = 'DaBoreySearchBot/1.0 (+https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/bot)';
 
-    // Condition 1: Use cURL if enabled
     if (function_exists('curl_init')) {
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -112,7 +114,6 @@ function fetch_webpage_content(string $url): string|false {
         return ($http_code >= 200 && $http_code < 300) ? $content : false;
     }
 
-    // Condition 2: Fallback to file_get_contents stream
     $options = [
         'http' => [
             'method'          => 'GET',
@@ -172,7 +173,7 @@ function is_url_allowed_by_robots(string $url): bool {
 }
 
 /**
- * Main Resumable Crawler Logic
+ * High-Speed Resumable Web Crawler Logic
  */
 function crawl_website(string $start_url, int $max_pages = 500): int {
     global $db; 
@@ -184,7 +185,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
 
     init_queue_table($db);
 
-    // Seed queue with start_url if the queue is empty
+    // Seed queue with initial URL if queue is empty
     $pending_count = $db->query("SELECT COUNT(*) FROM crawl_queue WHERE status = 'pending'")->fetchColumn();
     if ($pending_count == 0) {
         $stmt = $db->prepare("INSERT OR IGNORE INTO crawl_queue (url, status) VALUES (:url, 'pending')");
@@ -203,7 +204,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
 
     $count = 0;
     $start_time = time();
-    $max_seconds = 280; // Safety exit threshold before server timeout
+    $max_seconds = 280; // Safety threshold before server execution timeout
 
     // Prepared statements
     $get_next_stmt  = $db->prepare("SELECT url FROM crawl_queue WHERE status = 'pending' LIMIT 1");
@@ -211,17 +212,16 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
     $add_queue_stmt = $db->prepare("INSERT OR IGNORE INTO crawl_queue (url, status) VALUES (:url, 'pending')");
     $save_url_stmt  = $db->prepare("INSERT INTO urls (url, title, source, crawled_at) VALUES (:url, :title, :source, CURRENT_TIMESTAMP) ON CONFLICT(url) DO UPDATE SET title = :title, source = :source, crawled_at = CURRENT_TIMESTAMP");
 
-    // Fetch total current indexed database count
     $db_count = $db->query("SELECT COUNT(*) FROM urls")->fetchColumn();
 
     while (($db_count + $count) < $max_pages) {
-        // Prevent execution kills by exiting safely before 300s timeout limit
+        // Exit safely before server times out
         if ((time() - $start_time) >= $max_seconds) {
             echo "<br>⏱️ <strong>Execution limit reached ({$max_seconds}s)! Saving queue state for auto-resume...</strong><br>";
             break;
         }
 
-        // Fetch next URL from queue
+        // Fetch next URL
         $get_next_stmt->execute();
         $current_url = $get_next_stmt->fetchColumn();
 
@@ -233,17 +233,13 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         // Mark current URL completed immediately
         $mark_done_stmt->execute([':url' => $current_url]);
 
-        // Skip non-HTML files
-        if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url)) {
+        // Filter non-HTML extensions and redundant pagination
+        if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url) ||
+            preg_match('/\/(page\/|tags\/|download\/.*\/download\/)/i', $current_url)) {
             continue;
         }
 
-        // Skip redundant pagination, tags, and duplicate download action links
-        if (preg_match('/\/(page\/|tags\/|download\/.*\/download\/)/i', $current_url)) {
-            continue;
-        }
-
-        // Verify robots.txt rules
+        // Check robots.txt
         if (!is_url_allowed_by_robots($current_url)) {
             echo "⚠️ Skipped (Blocked by robots.txt): " . htmlspecialchars($current_url) . "<br>";
             continue;
@@ -263,7 +259,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
         libxml_clear_errors();
 
-        // Extract <title>
+        // Extract title
         $title = '';
         $title_nodes = $dom->getElementsByTagName('title');
         if ($title_nodes->length > 0) {
@@ -273,7 +269,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             $title = 'Untitled Page (' . parse_url($current_url, PHP_URL_PATH) . ')';
         }
 
-        // Save into SQLite Database
+        // Save indexed page into DB
         try {
             $save_url_stmt->execute([
                 ':url'    => $current_url,
@@ -286,7 +282,7 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             echo "⚠️ Database Error: " . htmlspecialchars($e->getMessage()) . "<br>";
         }
 
-        // Check for HTML <base href="...">
+        // Check for HTML base tag
         $effective_base_url = $current_url;
         $base_nodes = $dom->getElementsByTagName('base');
         if ($base_nodes->length > 0 && $base_nodes->item(0)->hasAttribute('href')) {
@@ -297,12 +293,11 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             }
         }
 
-        // Extract internal links and push directly to persistent DB queue
+        // Extract internal links into memory array
+        $extracted_links = [];
         $links = $dom->getElementsByTagName('a');
         foreach ($links as $link_node) {
-            if (!$link_node->hasAttribute('href')) {
-                continue;
-            }
+            if (!$link_node->hasAttribute('href')) continue;
 
             $raw_href = strtok($link_node->getAttribute('href'), '#');
             $full_url = resolve_url($raw_href, $effective_base_url);
@@ -310,13 +305,22 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
             if ($full_url) {
                 $link_domain = parse_url($full_url, PHP_URL_HOST) ?? '';
                 if (strcasecmp($link_domain, $base_domain) === 0) {
-                    $add_queue_stmt->execute([':url' => $full_url]);
+                    $extracted_links[] = $full_url;
                 }
             }
         }
 
-        // Rate-limiting delay (100ms)
-        usleep(100000);
+        // Bulk insert extracted links in ONE SINGLE TRANSACTION to maximize SQLite speed
+        if (!empty($extracted_links)) {
+            $db->beginTransaction();
+            foreach ($extracted_links as $link_to_add) {
+                $add_queue_stmt->execute([':url' => $link_to_add]);
+            }
+            $db->commit();
+        }
+
+        // Rate-limiting delay (50ms)
+        usleep(50000);
 
         if (ob_get_level() > 0) ob_flush();
         flush();
@@ -352,12 +356,12 @@ if (!empty($start_url)) {
     echo "⏳ Remaining URLs pending in queue: " . $queue_remaining . "<br>";
     echo "----------------------------------------<br>";
 
-    // Auto-continue condition if total indexed count is under target and queue still has items
+    // Auto-continue if goal not met and queue still has pending URLs
     if ($db_count < $max_pages && $queue_remaining > 0) {
         $next_url = "crawl.php?url=" . urlencode($start_url) . "&max=" . $max_pages;
         
         echo "<div style='color: #facc15; font-weight: bold;' id='timer'>
-                ⏱️ Reached batch limit. Automatically resuming next batch in 5 seconds...
+                ⏱️ Reached 280s batch limit. Automatically resuming next batch in 5 seconds...
               </div>";
         echo '<a href="index.php" style="color: #38bdf8; text-decoration: none;">[ Stop & Go Back to Search ]</a>';
 
@@ -368,7 +372,7 @@ if (!empty($start_url)) {
             const interval = setInterval(() => {
                 seconds--;
                 if (seconds > 0) {
-                    timerElement.innerText = '⏱️ Reached batch limit. Automatically resuming next batch in ' + seconds + ' seconds...';
+                    timerElement.innerText = '⏱️ Reached 280s batch limit. Automatically resuming next batch in ' + seconds + ' seconds...';
                 } else {
                     clearInterval(interval);
                     window.location.href = '$next_url';
