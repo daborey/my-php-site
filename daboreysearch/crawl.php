@@ -1,8 +1,8 @@
 <?php
-ini_set('max_execution_time', 300);
+ini_set('max_execution_time', 600);
 ini_set('memory_limit', '256M');
 
-// Force continuous streaming output to prevent proxy/server timeouts
+// 1. Force continuous streaming output to prevent proxy/server timeouts
 if (function_exists('apache_setenv')) {
     @apache_setenv('no-gzip', '1');
 }
@@ -12,6 +12,15 @@ for ($i = 0; $i < ob_get_level(); $i++) {
     ob_end_flush();
 }
 ob_implicit_flush(true);
+
+// 2. Catch fatal crashes, execution timeouts, and out-of-memory errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        echo "<br><br>❌ <strong>Crawl Stopped Due To Fatal Error:</strong> " . htmlspecialchars($error['message']) . 
+             " in <strong>" . htmlspecialchars($error['file']) . "</strong> on line <strong>" . $error['line'] . "</strong><br>";
+    }
+});
 
 require_once 'config.php';
 
@@ -156,7 +165,7 @@ function is_url_allowed_by_robots(string $url): bool {
  * Main Crawler Logic
  */
 function crawl_website(string $start_url, int $max_pages = 500): int {
-    global $db; // Changed $pdo to $db to match config.php
+    global $db; 
 
     if (!$db) {
         echo "❌ Database connection failure. Variable \$db is not set.<br>";
@@ -175,7 +184,16 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
         return 0;
     }
 
+    $start_time = time();
+    $max_seconds = 280; // Safety exit threshold before server timeout
+
     while (!empty($queue) && $count < $max_pages) {
+        // 3. Prevent abrupt execution kills by exiting safely before 300s timeout limit
+        if ((time() - $start_time) >= $max_seconds) {
+            echo "<br>⏱️ <strong>Execution time limit reached ({$max_seconds}s)! Stopping crawl safely...</strong><br>";
+            break;
+        }
+
         $current_url = array_shift($queue);
 
         // Normalize URL
@@ -188,6 +206,11 @@ function crawl_website(string $start_url, int $max_pages = 500): int {
 
         // Skip non-HTML files
         if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url)) {
+            continue;
+        }
+
+        // 4. Skip redundant pagination, tags, and duplicate download action links
+        if (preg_match('/\/(page\/|tags\/|download\/.*\/download\/)/i', $current_url)) {
             continue;
         }
 
