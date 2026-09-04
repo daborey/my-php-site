@@ -1,7 +1,4 @@
 <?php
-// ============================================
-// FILE: daboreysearch/crawl.php
-// ============================================
 ini_set('max_execution_time', 300);
 ini_set('memory_limit', '256M');
 
@@ -17,104 +14,138 @@ for ($i = 0; $i < ob_get_level(); $i++) {
 ob_implicit_flush(true);
 
 require_once 'config.php';
-require_once 'functions.php';
-require_once 'security.php';
-
-// ===== LOGIN CHECK =====
-if (!isset($_SESSION['search_user_id'])) {
-    header("Location: /daboreysearch/login.php");
-    exit;
-}
-
-// ===== HANDLE CLEAR ALL DATA =====
-if (isset($_GET['clear']) && $_GET['clear'] === 'yes') {
-    clear_urls();
-    header("Location: /daboreysearch/crawl.php?cleared=1");
-    exit;
-}
-
-// ===== AUTO-CRAWL FROM INDEX =====
-$auto_url = $_GET['url'] ?? '';
-$auto_mode = isset($_GET['auto']) && $_GET['auto'] == 1;
-
-if ($auto_mode && !empty($auto_url)) {
-    // Auto-start crawl
-    echo '<div class="container">';
-    echo '<h1>🕷️ Auto-Crawling...</h1>';
-    echo '<div class="output">';
-    echo "🔄 Starting crawl from index page...\n";
-    echo "📍 Target: $auto_url\n";
-    echo "📄 Max pages: 500\n";
-    echo str_repeat('-', 40) . "\n";
-
-    $crawled = crawl_website($auto_url, 500);
-
-    echo str_repeat('-', 40) . "\n";
-    echo "✅ Crawl complete!\n";
-    echo "📊 Total pages crawled: $crawled\n";
-    echo "📚 Total URLs in database: " . count_urls() . "\n";
-    echo '</div>';
-    echo '<a href="/daboreysearch/index.php?crawled=' . $crawled . '&source=' . urlencode(parse_url($auto_url, PHP_URL_HOST)) . '" class="back-link">← Back to Search</a>';
-    echo '</div>';
-    exit;
-}
-
-// ===== HELPER FUNCTIONS =====
 
 /**
- * Checks if a URL is allowed by the domain's robots.txt rules.
+ * Robustly resolves any relative, absolute, or protocol-relative URL 
+ * into a fully-qualified HTTP/HTTPS URL.
  */
-function is_url_allowed_by_robots($url)
-{
-    static $robots_cache = [];
+function resolve_url(string $relative_url, string $base_url): ?string {
+    $relative_url = trim($relative_url);
 
-    $parsed = parse_url($url);
-    if (!isset($parsed['scheme'], $parsed['host'])) {
-        return true;
+    // Ignore non-http links, anchors, and javascript
+    if (empty($relative_url) || 
+        preg_match('/^(javascript:|mailto:|tel:|data:|#)/i', $relative_url)) {
+        return null;
     }
 
-    $domain = $parsed['scheme'] . '://' . $parsed['host'];
+    $base_parts = parse_url($base_url);
+    if (!isset($base_parts['host'])) {
+        return null;
+    }
 
-    // Cache robots.txt content per domain to avoid re-fetching
-    if (!isset($robots_cache[$domain])) {
-        $robots_url = $domain . '/robots.txt';
-        $context = stream_context_create([
-            'http' => [
-                'user_agent' => 'DaBoreySearchBot/1.0 (+https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ')',
-                'timeout' => 3
-            ]
+    $scheme = $base_parts['scheme'] ?? 'https';
+    $host   = $base_parts['host'];
+    $port   = isset($base_parts['port']) ? ':' . $base_parts['port'] : '';
+
+    // 1. Fully-qualified URL
+    if (preg_match('/^https?:\/\//i', $relative_url)) {
+        return $relative_url;
+    }
+
+    // 2. Protocol-relative URL (e.g., //www.example.com/path)
+    if (str_starts_with($relative_url, '//')) {
+        return $scheme . ':' . $relative_url;
+    }
+
+    // 3. Absolute path from host root (e.g., /software/security)
+    if (str_starts_with($relative_url, '/')) {
+        return $scheme . '://' . $host . $port . $relative_url;
+    }
+
+    // 4. Query string only (e.g., ?page=2)
+    if (str_starts_with($relative_url, '?')) {
+        $path = $base_parts['path'] ?? '/';
+        return $scheme . '://' . $host . $port . $path . $relative_url;
+    }
+
+    // 5. Relative directory path (e.g., subcategory/page.html)
+    $path = $base_parts['path'] ?? '/';
+    $dir  = rtrim(dirname($path), '/\\');
+    $dir  = ($dir === '') ? '' : $dir;
+
+    return $scheme . '://' . $host . $port . $dir . '/' . ltrim($relative_url, '/');
+}
+
+/**
+ * Safely fetches HTML content using cURL if available, or file_get_contents stream context.
+ */
+function fetch_webpage_content(string $url): string|false {
+    $user_agent = 'DaBoreySearchBot/1.0 (+https://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '/bot)';
+
+    // Condition 1: Use cURL if enabled (handles modern SSL, redirects, and headers better)
+    if (function_exists('curl_init')) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_USERAGENT      => $user_agent,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_ENCODING       => '', // Accept all encodings (gzip/deflate)
         ]);
+        $content = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        $content = @file_get_contents($robots_url, false, $context);
-        $disallowed = [];
+        return ($http_code >= 200 && $http_code < 300) ? $content : false;
+    }
 
-        if ($content !== false) {
-            $lines = explode("\n", $content);
-            $applies = true;
+    // Condition 2: Fallback to file_get_contents stream
+    $options = [
+        'http' => [
+            'method'          => 'GET',
+            'header'          => "User-Agent: {$user_agent}\r\nAccept: text/html,application/xhtml+xml\r\n",
+            'timeout'         => 10,
+            'follow_location' => 1,
+            'ignore_errors'   => true
+        ],
+        'ssl' => [
+            'verify_peer'      => false,
+            'verify_peer_name' => false,
+        ]
+    ];
 
-            foreach ($lines as $line) {
-                $line = trim(preg_replace('/#.*/', '', $line));
-                if (empty($line)) continue;
+    $context = stream_context_create($options);
+    return @file_get_contents($url, false, $context);
+}
 
-                if (stripos($line, 'User-agent:') === 0) {
-                    $agent = trim(substr($line, 11));
-                    $applies = ($agent === '*' || stripos($agent, 'DaBoreySearch') !== false);
-                } elseif ($applies && stripos($line, 'Disallow:') === 0) {
-                    $rule = trim(substr($line, 9));
-                    if ($rule !== '') {
-                        $disallowed[] = $rule;
-                    }
-                }
-            }
-        }
-        $robots_cache[$domain] = $disallowed;
+/**
+ * Checks robots.txt restrictions safely.
+ */
+function is_url_allowed_by_robots(string $url): bool {
+    $parsed = parse_url($url);
+    if (!isset($parsed['host'])) {
+        return false;
+    }
+
+    $robots_url = ($parsed['scheme'] ?? 'https') . '://' . $parsed['host'] . '/robots.txt';
+    $robots_txt = fetch_webpage_content($robots_url);
+
+    if ($robots_txt === false || empty($robots_txt)) {
+        return true; // Assume allowed if robots.txt doesn't exist
     }
 
     $path = $parsed['path'] ?? '/';
+    $user_agent_section = false;
 
-    foreach ($robots_cache[$domain] as $rule) {
-        if ($rule === '/' || str_starts_with($path, $rule)) {
-            return false;
+    foreach (explode("\n", $robots_txt) as $line) {
+        $line = trim(preg_replace('/#.*/', '', $line)); // Remove comments
+        if (empty($line)) continue;
+
+        if (preg_match('/^User-agent:\s*(.*)$/i', $line, $matches)) {
+            $agent = trim($matches[1]);
+            $user_agent_section = ($agent === '*' || strcasecmp($agent, 'DaBoreySearchBot') === 0);
+            continue;
+        }
+
+        if ($user_agent_section && preg_match('/^Disallow:\s*(.*)$/i', $line, $matches)) {
+            $disallow_path = trim($matches[1]);
+            if (!empty($disallow_path) && str_starts_with($path, $disallow_path)) {
+                return false;
+            }
         }
     }
 
@@ -122,97 +153,118 @@ function is_url_allowed_by_robots($url)
 }
 
 /**
- * Main function to crawl web pages starting from a given URL
+ * Main Crawler Logic
  */
-function crawl_website($start_url, $max_pages = 500)
-{
-    $urls = [];
-    $visited = [];
+function crawl_website(string $start_url, int $max_pages = 500): int {
+    global $pdo;
+
     $queue = [$start_url];
+    $visited = [];
     $count = 0;
+
+    $parsed_start = parse_url($start_url);
+    $base_domain  = $parsed_start['host'] ?? '';
+
+    if (empty($base_domain)) {
+        echo "❌ Invalid starting URL.<br>";
+        return 0;
+    }
 
     while (!empty($queue) && $count < $max_pages) {
         $current_url = array_shift($queue);
-        $current_url = trim($current_url);
 
-        if (empty($current_url) || isset($visited[$current_url])) {
+        // Normalize URL to eliminate duplicate query parameters or anchor variations
+        $current_url = strtok($current_url, '#');
+
+        if (isset($visited[$current_url])) {
             continue;
         }
-
         $visited[$current_url] = true;
 
-        // 1. Check robots.txt compliance before hitting the server
+        // Skip non-HTML files based on extension
+        if (preg_match('/\.(pdf|jpg|jpeg|png|gif|zip|rar|exe|dmg|mp3|mp4|css|js|xml|json)$/i', $current_url)) {
+            continue;
+        }
+
+        // Verify robots.txt rules
         if (!is_url_allowed_by_robots($current_url)) {
-            echo "⚠️ Skipped (Blocked by robots.txt): $current_url\n";
+            echo "⚠️ Skipped (Blocked by robots.txt): " . htmlspecialchars($current_url) . "<br>";
             continue;
         }
 
-        // 2. Skip non-HTML links (images, archives, media files) by URL extension
-        $path_extension = strtolower(pathinfo(parse_url($current_url, PHP_URL_PATH) ?? '', PATHINFO_EXTENSION));
-        if (in_array($path_extension, ['pdf', 'zip', 'rar', 'exe', 'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'mp4', 'mp3', 'css', 'js', 'json'])) {
-            echo "⚠️ Skipped (Non-HTML File): $current_url\n";
+        echo "🔄 Crawling: " . htmlspecialchars($current_url) . "<br>";
+
+        $html = fetch_webpage_content($current_url);
+        if ($html === false || empty($html)) {
+            echo "❌ Failed to fetch: " . htmlspecialchars($current_url) . "<br>";
             continue;
         }
 
-        $count++;
+        // Parse HTML safely with DOMDocument
+        $dom = new DOMDocument();
+        libxml_use_internal_errors(true);
+        @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
 
-        echo "🔄 Crawling: $current_url\n";
-
-        // Transparent User-Agent header for courteous request identification
-        $options = [
-            'http' => [
-                'method' => "GET",
-                'header' => "User-Agent: DaBoreySearchBot/1.0 (+https://" . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ")\r\n"
-            ]
-        ];
-        $context = stream_context_create($options);
-        $html = @file_get_contents($current_url, false, $context);
-        if ($html === false) {
-            echo "❌ Failed to fetch: $current_url\n";
-            continue;
-        }
-
+        // Extract <title> tag safely
         $title = '';
-        if (preg_match('/<title>(.*?)<\/title>/i', $html, $matches)) {
-            $title = trim($matches[1]);
+        $title_nodes = $dom->getElementsByTagName('title');
+        if ($title_nodes->length > 0) {
+            $title = trim($title_nodes->item(0)->nodeValue);
+        }
+        if (empty($title)) {
+            $title = 'Untitled Page (' . parse_url($current_url, PHP_URL_PATH) . ')';
         }
 
-        $source_domain = parse_url($start_url, PHP_URL_HOST);
-        add_url($current_url, $title, $source_domain);
-        echo "✅ Saved: " . ($title ?: $current_url) . "\n";
+        // Save into SQLite Database
+        try {
+            $stmt = $pdo->prepare("INSERT OR REPLACE INTO pages (url, title, domain, updated_at) VALUES (:url, :title, :domain, CURRENT_TIMESTAMP)");
+            $stmt->execute([
+                ':url'    => $current_url,
+                ':title'  => $title,
+                ':domain' => $base_domain
+            ]);
+            $count++;
+            echo "✅ Saved: " . htmlspecialchars($title) . "<br>";
+        } catch (PDOException $e) {
+            echo "⚠️ Database Error: " . htmlspecialchars($e->getMessage()) . "<br>";
+        }
 
-        preg_match_all('/<a\s+href=["\']([^"\']*)["\']/i', $html, $matches);
-        $links = $matches[1];
-
-        foreach ($links as $link) {
-            if (strpos($link, 'http') !== 0) {
-                if (strpos($link, '/') === 0) {
-                    $parsed = parse_url($current_url);
-                    $base = $parsed['scheme'] . '://' . $parsed['host'];
-                    $link = $base . $link;
-                } elseif (strpos($link, '#') === 0 || strpos($link, 'javascript:') === 0) {
-                    continue;
-                } else {
-                    $link = dirname($current_url) . '/' . $link;
-                }
+        // Check for HTML <base href="..."> tags that alter link paths
+        $effective_base_url = $current_url;
+        $base_nodes = $dom->getElementsByTagName('base');
+        if ($base_nodes->length > 0 && $base_nodes->item(0)->hasAttribute('href')) {
+            $base_href = $base_nodes->item(0)->getAttribute('href');
+            $resolved_base = resolve_url($base_href, $current_url);
+            if ($resolved_base) {
+                $effective_base_url = $resolved_base;
             }
+        }
 
-            $parsed_current = parse_url($current_url);
-            $parsed_link = parse_url($link);
-
-            if (isset($parsed_link['host']) && $parsed_link['host'] !== $parsed_current['host']) {
+        // Extract and resolve all internal <a> links
+        $links = $dom->getElementsByTagName('a');
+        foreach ($links as $link_node) {
+            if (!$link_node->hasAttribute('href')) {
                 continue;
             }
 
-            if (!isset($visited[$link]) && !in_array($link, $queue)) {
-                $queue[] = $link;
+            $raw_href = $link_node->getAttribute('href');
+            $full_url = resolve_url($raw_href, $effective_base_url);
+
+            if ($full_url) {
+                $link_domain = parse_url($full_url, PHP_URL_HOST) ?? '';
+                
+                // Stay within the same domain (BFS limit)
+                if (strcasecmp($link_domain, $base_domain) === 0 && !isset($visited[$full_url])) {
+                    $queue[] = $full_url;
+                }
             }
         }
 
-        // Polite rate-limiting delay between requests (100ms)
+        // Rate-limiting delay (100ms)
         usleep(100000);
 
-        // Send output immediately to browser to keep connection alive
+        // Keep HTTP connection live for browser streaming output
         if (ob_get_level() > 0) ob_flush();
         flush();
     }
@@ -220,137 +272,31 @@ function crawl_website($start_url, $max_pages = 500)
     return $count;
 }
 
-// ===== MAIN EXECUTION =====
-?>
-<!DOCTYPE html>
-<html>
+// Execution block for crawl requests
+$start_url = $_GET['url'] ?? $_POST['url'] ?? '';
+$max_pages = isset($_GET['max']) ? (int)$_GET['max'] : 500;
 
-<head>
-    <meta charset="UTF-8">
-    <title>Crawl URLs - Da Borey Search</title>
-    <style>
-        body {
-            font-family: 'Kantumruy Pro', 'Segoe UI', Arial, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            padding: 20px;
-        }
+if (!empty($start_url)) {
+    // Ensure URL has a scheme prefix
+    if (!preg_match('/^https?:\/\//i', $start_url)) {
+        $start_url = 'https://' . $start_url;
+    }
 
-        .container {
-            max-width: 700px;
-            margin: 0 auto;
-            background: #1e293b;
-            padding: 25px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-        }
+    echo '<div style="font-family: monospace; background: #0f172a; color: #f8fafc; padding: 20px; border-radius: 8px; line-height: 1.6;">';
+    echo "🕷️ <strong>DaBoreySearch Engine Crawler</strong><br>";
+    echo "📍 Target: " . htmlspecialchars($start_url) . "<br>";
+    echo "📄 Cap Limit: " . $max_pages . " pages<br>";
+    echo "----------------------------------------<br>";
 
-        h1 {
-            color: #38bdf8;
-        }
+    $total = crawl_website($start_url, $max_pages);
 
-        .info {
-            color: #94a3b8;
-        }
+    $db_count = $pdo->query("SELECT COUNT(*) FROM pages")->fetchColumn();
 
-        .form-group {
-            margin: 15px 0;
-        }
-
-        input[type="url"] {
-            width: 100%;
-            padding: 10px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-
-        button {
-            background: #0284c7;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #0369a1;
-        }
-
-        .output {
-            background: #0f172a;
-            padding: 15px;
-            border-radius: 4px;
-            margin-top: 15px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 13px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            color: #cbd5e1;
-        }
-
-        .back-link {
-            color: #38bdf8;
-            text-decoration: none;
-            display: inline-block;
-            margin-top: 15px;
-        }
-    </style>
-</head>
-
-<body>
-
-    <div class="container">
-        <?php if (isset($_GET['cleared'])): ?>
-            <div style="background: #7f1d1d; border: 1px solid #991b1b; color: #fca5a5; padding: 12px 18px; border-radius: 6px; margin-bottom: 20px;">
-                ✅ All URLs have been deleted from the database.
-            </div>
-        <?php endif; ?>
-        <h1>🕷️ URL Crawler</h1>
-        <p class="info">Enter a URL to start crawling. The crawler will find and save all internal links.</p>
-
-        <form method="POST" action="">
-            <div class="form-group">
-                <input type="url" name="start_url" placeholder="https://yoursite.com" required>
-            </div>
-            <div class="form-group">
-                <label>Max pages: <input type="number" name="max_pages" value="500" min="1" max="1000" style="width:80px; background:#0f172a; border:1px solid #334155; color:white; padding:6px;"></label>
-            </div>
-            <button type="submit">🚀 Start Crawl</button>
-        </form>
-
-        <?php if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['start_url'])) :
-            $start_url = $_POST['start_url'];
-            $max_pages = (int)($_POST['max_pages'] ?? 500);
-
-            echo '<div class="output">';
-            echo "🔄 Starting crawl...\n";
-            echo "📍 Target: $start_url\n";
-            echo "📄 Max pages: $max_pages\n";
-            echo str_repeat('-', 40) . "\n";
-
-            $crawled = crawl_website($start_url, $max_pages);
-
-            echo str_repeat('-', 40) . "\n";
-            echo "✅ Crawl complete!\n";
-            echo "📊 Total pages crawled: $crawled\n";
-            echo "📚 Total URLs in database: " . count_urls() . "\n";
-            echo '</div>';
-        endif; ?>
-
-        <a href="index.php" class="back-link">← Back to Search</a>
-        <br>
-        <a href="/daboreysearch/logout.php" style="color:#ef4444; text-decoration:none; margin-top:10px; display:inline-block;">🚪 Logout</a>
-        <br><br>
-        <a href="?clear=yes" onclick="return confirm('⚠️ Delete ALL crawled URLs from ALL sources? This cannot be undone!');" style="color:#ef4444; text-decoration:none; font-weight:bold; border:1px solid #ef4444; padding:8px 16px; border-radius:4px; display:inline-block; margin-top:10px;">🗑️ Clear All Data</a>
-    </div>
-
-</body>
-
-</html>
+    echo "----------------------------------------<br>";
+    echo "✅ <strong>Crawl complete!</strong><br>";
+    echo "📊 Total pages crawled in run: " . $total . "<br>";
+    echo "📚 Total indexed URLs in DB: " . $db_count . "<br>";
+    echo "----------------------------------------<br>";
+    echo '<a href="index.php" style="color: #38bdf8; text-decoration: none;">← Back to Search</a>';
+    echo '</div>';
+}
