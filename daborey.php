@@ -31,6 +31,7 @@
         <li><a href="https://github.com/khmerdevelopercommunity?tab=repositories" target="_blank">Github khmerdevelopercommunity repositories</a></li>
         <li><a href="https://chat.deepseek.com/" target="_blank">Deepseek ai</a></li>
         <li><a href="https://play.google.com/store/apps/details?id=popup.ads.detector&pcampaignid=web_share" target="_blank">Popup Ad Detector & Blocker</a></li>
+        <li><a href="https://play.google.com/store/apps/details?id=io.github.visnkmr.bapl&pcampaignid=web_share" target="_blank">Background Apps & Process List</a></li>
     </ol>
 </body>
 
