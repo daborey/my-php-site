@@ -32,7 +32,7 @@
         <li><a href="https://chat.deepseek.com/" target="_blank">Deepseek ai</a></li>
         <li><a href="https://play.google.com/store/apps/details?id=popup.ads.detector&pcampaignid=web_share" target="_blank">Popup Ad Detector & Blocker</a></li>
         <li><a href="https://play.google.com/store/apps/details?id=io.github.visnkmr.bapl&pcampaignid=web_share" target="_blank">Background Apps & Process List</a></li>
-        <li><a href="#">បិទទូរស័ព្ទ បើកវិញពេលចេញ logo ចុច volume '-' ឲ្យជាប់តែលែង power សំរាប់ samsung ចុច power ឲ្យជាប់ពេលឃើញ power off ចុចលើ power off ឲ្យជាប់ហើយចុចលើ safe mode</a></li>
+        <li><a href="#">បិទទូរស័ព្ទ បើកវិញពេលចេញ logo ចុច volume '-' ឲ្យជាប់តែលែង power សំរាប់ samsung ចុច power ឲ្យជាប់ពេលឃើញ power off ចុចលើ power off ឲ្យជាប់ហើយចុចលើ safe mode សំរាប់ huawei power off ចុចបើកជាមួយ volume '+' ពេលចេញ logo លែង</a></li>
     </ol>
 </body>
 
