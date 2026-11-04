@@ -224,6 +224,8 @@ try {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Dashboard & Notes</title>
+    <link rel="stylesheet" href="assets/codemirror/lib/codemirror.css">
+    <link rel="stylesheet" href="assets/codemirror/theme/dracula.css">
     <script>
         function openEditModal(id, title, content) {
             document.getElementById('edit_note_id').value = id;
@@ -619,6 +621,43 @@ try {
             </form>
         </div>
     </div>
+
+    <script src="assets/codemirror/lib/codemirror.js"></script>
+<script src="assets/codemirror/mode/xml/xml.js"></script>
+<script src="assets/codemirror/mode/javascript/javascript.js"></script>
+<script src="assets/codemirror/mode/css/css.js"></script>
+<script src="assets/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+<script>
+    // Initialize CodeMirror on the edit textarea
+    var cmEditor = CodeMirror.fromTextArea(document.getElementById('edit_content'), {
+        mode: 'htmlmixed',
+        theme: 'dracula',
+        lineNumbers: true,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2
+    });
+
+    // Open modal → push the note content INTO CodeMirror
+    function openEditModal(id, title, content) {
+        document.getElementById('edit_note_id').value = id;
+        document.getElementById('edit_title').value = title;
+        cmEditor.setValue(content || '');        // ← CodeMirror, not textarea
+        document.getElementById('editModal').style.display = 'flex';
+        setTimeout(function () { cmEditor.refresh(); }, 50); // fix render when modal opens
+    }
+
+    // Close modal → clear editor so next open is fresh
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+        cmEditor.setValue('');
+    }
+
+    // Make sure the textarea gets the value back before submit
+    document.querySelector('#editModal form').addEventListener('submit', function () {
+        cmEditor.save();   // copies CodeMirror content back into <textarea name="content">
+    });
+</script>
 
     <script>
         function updateKhmerClock() {
