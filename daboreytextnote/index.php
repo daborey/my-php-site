@@ -385,6 +385,7 @@ try {
             gap: 16px;
             max-width: 1200px;
             margin: 0 auto;
+            align-items: start;
         }
 
         .note-card {
@@ -410,7 +411,6 @@ try {
             color: #cbd5e1;
             white-space: pre-wrap;
             margin: 0 0 12px 0;
-            flex-grow: 1;
         }
 
         .note-date {
