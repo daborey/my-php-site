@@ -387,6 +387,10 @@ try {
             flex-direction: column;
             justify-content: space-between;
             word-wrap: break-word;
+            height: 260px;
+            /* fixed height */
+            overflow: hidden;
+            /* prevent card growing */
         }
 
         .note-title {
@@ -401,6 +405,11 @@ try {
             color: #cbd5e1;
             white-space: pre-wrap;
             margin: 0 0 12px 0;
+            flex: 1;
+            /* fill remaining space */
+            overflow-y: auto;
+            /* scroll inside */
+            max-height: 100%;
         }
 
         .note-date {
@@ -569,7 +578,7 @@ try {
         <?php if (!empty($notes)) : ?>
             <?php foreach ($notes as $note) : ?>
                 <div class="note-card">
-                    <div>
+                    <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
