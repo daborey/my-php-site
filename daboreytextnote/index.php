@@ -226,18 +226,6 @@ try {
     <title>Secure Dashboard & Notes</title>
     <link rel="stylesheet" href="assets/codemirror/lib/codemirror.css">
     <link rel="stylesheet" href="assets/codemirror/theme/dracula.css">
-    <script>
-        function openEditModal(id, title, content) {
-            document.getElementById('edit_note_id').value = id;
-            document.getElementById('edit_title').value = title;
-            document.getElementById('edit_content').value = content;
-            document.getElementById('editModal').style.display = 'flex';
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').style.display = 'none';
-        }
-    </script>
     <style>
         body {
             font-family: 'Kantumruy Pro', 'Khmer OS Battambang', 'Segoe UI', Arial, sans-serif;
@@ -494,7 +482,8 @@ try {
             }
 
             /* Edge-to-Edge Mobile Modals */
-            #editModal > div, #importModal > div {
+            #editModal>div,
+            #importModal>div {
                 width: 95% !important;
                 padding: 16px !important;
                 box-sizing: border-box;
@@ -514,7 +503,7 @@ try {
                 <button type="button" onclick="document.getElementById('importModal').style.display='flex'" class="btn-logout" style="background:#0284c7; border:none; cursor:pointer;">Import HTML</button>
                 <a href="logout.php" class="btn-logout">Sign Out</a>
             </div>
-            </div>
+        </div>
         </div>
 
         <div class="clock-container">
@@ -614,9 +603,12 @@ try {
                     <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
                 </div>
 
-                <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                    <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
-                    <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                    <button type="button" onclick="formatEditorContent(this)" style="background: #8b5cf6; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">⚡ Format</button>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                        <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -627,6 +619,7 @@ try {
 <script src="assets/codemirror/mode/javascript/javascript.js"></script>
 <script src="assets/codemirror/mode/css/css.js"></script>
 <script src="assets/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+<script src="assets/js-beautify/beautify-html.min.js"></script>
 <script>
     // Initialize CodeMirror on the edit textarea
     var cmEditor = CodeMirror.fromTextArea(document.getElementById('edit_content'), {
@@ -642,9 +635,11 @@ try {
     function openEditModal(id, title, content) {
         document.getElementById('edit_note_id').value = id;
         document.getElementById('edit_title').value = title;
-        cmEditor.setValue(content || '');        // ← CodeMirror, not textarea
+        cmEditor.setValue(content || '');
         document.getElementById('editModal').style.display = 'flex';
-        setTimeout(function () { cmEditor.refresh(); }, 50); // fix render when modal opens
+        setTimeout(function() {
+            cmEditor.refresh();
+        }, 50);
     }
 
     // Close modal → clear editor so next open is fresh
@@ -653,36 +648,67 @@ try {
         cmEditor.setValue('');
     }
 
+    // Format button → beautify the HTML inside the editor
+    function formatEditorContent(btn) {
+        var current = cmEditor.getValue();
+        if (!current || !current.trim()) return;
+
+        try {
+            var formatted = html_beautify(current, {
+                indent_size: 2,
+                indent_char: ' ',
+                wrap_line_length: 0,
+                preserve_newlines: true,
+                max_preserve_newlines: 2,
+                end_with_newline: false,
+                extra_liners: []
+            });
+
+            var cursor = cmEditor.getCursor();
+            cmEditor.setValue(formatted);
+            cmEditor.setCursor(cursor);
+
+            var originalText = btn.innerText;
+            btn.innerText = '✓ Formatted';
+            setTimeout(function() {
+                btn.innerText = originalText;
+            }, 1200);
+        } catch (e) {
+            console.error('Format failed:', e);
+            alert('Could not format: ' + e.message);
+        }
+    }
+
     // Make sure the textarea gets the value back before submit
-    document.querySelector('#editModal form').addEventListener('submit', function () {
-        cmEditor.save();   // copies CodeMirror content back into <textarea name="content">
+    document.querySelector('#editModal form').addEventListener('submit', function() {
+        cmEditor.save();
     });
 </script>
 
-    <script>
-        function updateKhmerClock() {
-            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+<script>
+    function updateKhmerClock() {
+        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
 
-            function toKhmerNum(num) {
-                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-            }
-            const now = new Date();
-            let rawHours = now.getHours();
-            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-            rawHours = rawHours % 12;
-            rawHours = rawHours ? rawHours : 12;
-            document.getElementById('hours').innerText = toKhmerNum(rawHours);
-            document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
-            document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
-            document.getElementById('ampm').innerText = ampmKhmer;
-            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
-            document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+        function toKhmerNum(num) {
+            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
         }
-        updateKhmerClock();
-        setInterval(updateKhmerClock, 1000);
-    </script>
+        const now = new Date();
+        let rawHours = now.getHours();
+        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+        rawHours = rawHours % 12;
+        rawHours = rawHours ? rawHours : 12;
+        document.getElementById('hours').innerText = toKhmerNum(rawHours);
+        document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
+        document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
+        document.getElementById('ampm').innerText = ampmKhmer;
+        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
+        document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+    }
+    updateKhmerClock();
+    setInterval(updateKhmerClock, 1000);
+</script>
 </body>
 
 </html>
