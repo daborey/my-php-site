@@ -489,6 +489,29 @@ try {
                 box-sizing: border-box;
             }
         }
+
+        /* ===== CodeMirror editor styling ===== */
+        .CodeMirror {
+            height: 400px;
+            /* taller editor */
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            border-radius: 4px;
+            border: 1px solid #334155;
+            background: #282a36;
+            /* dracula bg */
+        }
+
+        .CodeMirror-scroll {
+            min-height: 400px;
+        }
+
+        /* Fix modal width for editor */
+        #editModal>div {
+            width: 90%;
+            max-width: 800px;
+            /* wider modal — was 480px */
+        }
     </style>
 </head>
 
@@ -588,7 +611,7 @@ try {
         </div>
     </div>
     <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
-        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; max-width: 480px; border: 1px solid #334155;">
+        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; border: 1px solid #334155;">
             <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
             <form method="POST" action="index.php">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
@@ -615,100 +638,100 @@ try {
     </div>
 
     <script src="assets/codemirror/lib/codemirror.js"></script>
-<script src="assets/codemirror/mode/xml/xml.js"></script>
-<script src="assets/codemirror/mode/javascript/javascript.js"></script>
-<script src="assets/codemirror/mode/css/css.js"></script>
-<script src="assets/codemirror/mode/htmlmixed/htmlmixed.js"></script>
-<script src="assets/js-beautify/beautify-html.min.js"></script>
-<script>
-    // Initialize CodeMirror on the edit textarea
-    var cmEditor = CodeMirror.fromTextArea(document.getElementById('edit_content'), {
-        mode: 'htmlmixed',
-        theme: 'dracula',
-        lineNumbers: true,
-        lineWrapping: true,
-        indentUnit: 2,
-        tabSize: 2
-    });
+    <script src="assets/codemirror/mode/xml/xml.js"></script>
+    <script src="assets/codemirror/mode/javascript/javascript.js"></script>
+    <script src="assets/codemirror/mode/css/css.js"></script>
+    <script src="assets/codemirror/mode/htmlmixed/htmlmixed.js"></script>
+    <script src="assets/js-beautify/beautify-html.min.js"></script>
+    <script>
+        // Initialize CodeMirror on the edit textarea
+        var cmEditor = CodeMirror.fromTextArea(document.getElementById('edit_content'), {
+            mode: 'htmlmixed',
+            theme: 'dracula',
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2
+        });
 
-    // Open modal → push the note content INTO CodeMirror
-    function openEditModal(id, title, content) {
-        document.getElementById('edit_note_id').value = id;
-        document.getElementById('edit_title').value = title;
-        cmEditor.setValue(content || '');
-        document.getElementById('editModal').style.display = 'flex';
-        setTimeout(function() {
-            cmEditor.refresh();
-        }, 50);
-    }
-
-    // Close modal → clear editor so next open is fresh
-    function closeEditModal() {
-        document.getElementById('editModal').style.display = 'none';
-        cmEditor.setValue('');
-    }
-
-    // Format button → beautify the HTML inside the editor
-    function formatEditorContent(btn) {
-        var current = cmEditor.getValue();
-        if (!current || !current.trim()) return;
-
-        try {
-            var formatted = html_beautify(current, {
-                indent_size: 2,
-                indent_char: ' ',
-                wrap_line_length: 0,
-                preserve_newlines: true,
-                max_preserve_newlines: 2,
-                end_with_newline: false,
-                extra_liners: []
-            });
-
-            var cursor = cmEditor.getCursor();
-            cmEditor.setValue(formatted);
-            cmEditor.setCursor(cursor);
-
-            var originalText = btn.innerText;
-            btn.innerText = '✓ Formatted';
+        // Open modal → push the note content INTO CodeMirror
+        function openEditModal(id, title, content) {
+            document.getElementById('edit_note_id').value = id;
+            document.getElementById('edit_title').value = title;
+            cmEditor.setValue(content || '');
+            document.getElementById('editModal').style.display = 'flex';
             setTimeout(function() {
-                btn.innerText = originalText;
-            }, 1200);
-        } catch (e) {
-            console.error('Format failed:', e);
-            alert('Could not format: ' + e.message);
+                cmEditor.refresh();
+            }, 50);
         }
-    }
 
-    // Make sure the textarea gets the value back before submit
-    document.querySelector('#editModal form').addEventListener('submit', function() {
-        cmEditor.save();
-    });
-</script>
-
-<script>
-    function updateKhmerClock() {
-        const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
-        const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
-        const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
-
-        function toKhmerNum(num) {
-            return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+        // Close modal → clear editor so next open is fresh
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            cmEditor.setValue('');
         }
-        const now = new Date();
-        let rawHours = now.getHours();
-        const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
-        rawHours = rawHours % 12;
-        rawHours = rawHours ? rawHours : 12;
-        document.getElementById('hours').innerText = toKhmerNum(rawHours);
-        document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
-        document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
-        document.getElementById('ampm').innerText = ampmKhmer;
-        document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
-        document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
-    }
-    updateKhmerClock();
-    setInterval(updateKhmerClock, 1000);
-</script>
+
+        // Format button → beautify the HTML inside the editor
+        function formatEditorContent(btn) {
+            var current = cmEditor.getValue();
+            if (!current || !current.trim()) return;
+
+            try {
+                var formatted = html_beautify(current, {
+                    indent_size: 2,
+                    indent_char: ' ',
+                    wrap_line_length: 0,
+                    preserve_newlines: true,
+                    max_preserve_newlines: 2,
+                    end_with_newline: false,
+                    extra_liners: []
+                });
+
+                var cursor = cmEditor.getCursor();
+                cmEditor.setValue(formatted);
+                cmEditor.setCursor(cursor);
+
+                var originalText = btn.innerText;
+                btn.innerText = '✓ Formatted';
+                setTimeout(function() {
+                    btn.innerText = originalText;
+                }, 1200);
+            } catch (e) {
+                console.error('Format failed:', e);
+                alert('Could not format: ' + e.message);
+            }
+        }
+
+        // Make sure the textarea gets the value back before submit
+        document.querySelector('#editModal form').addEventListener('submit', function() {
+            cmEditor.save();
+        });
+    </script>
+
+    <script>
+        function updateKhmerClock() {
+            const khmerNumerals = ['០', '១', '២', '៣', '៤', '៥', '៦', '៧', '៨', '៩'];
+            const khmerDays = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+            const khmerMonths = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+
+            function toKhmerNum(num) {
+                return num.toString().padStart(2, '0').split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+            }
+            const now = new Date();
+            let rawHours = now.getHours();
+            const ampmKhmer = rawHours >= 12 ? 'ល្ងាច' : 'ព្រឹក';
+            rawHours = rawHours % 12;
+            rawHours = rawHours ? rawHours : 12;
+            document.getElementById('hours').innerText = toKhmerNum(rawHours);
+            document.getElementById('minutes').innerText = toKhmerNum(now.getMinutes());
+            document.getElementById('seconds').innerText = toKhmerNum(now.getSeconds());
+            document.getElementById('ampm').innerText = ampmKhmer;
+            document.getElementById('khmer-day').innerText = 'ថ្ងៃ' + khmerDays[now.getDay()];
+            document.getElementById('khmer-date').innerText = toKhmerNum(now.getDate()) + ' ' + khmerMonths[now.getMonth()] + ' ' + now.getFullYear().toString().split('').map(digit => khmerNumerals[parseInt(digit)] || digit).join('');
+        }
+        updateKhmerClock();
+        setInterval(updateKhmerClock, 1000);
+    </script>
 </body>
 
 </html>
