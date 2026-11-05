@@ -576,7 +576,7 @@ try {
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
                         <div style="display: flex; gap: 6px;">
-                            <button type="button" onclick="openEditModal(<?php echo $note['id']; ?>, '<?php echo htmlspecialchars(addslashes($note['title'] ?? ''), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $note['content'] ?? '')), ENT_QUOTES); ?>')" style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
+                            <button type="button" onclick='openEditModal(<?php echo $note["id"]; ?>, <?php echo json_encode($note["title"] ?? "", JSON_HEX_APOS | JSON_HEX_QUOT); ?>, <?php echo json_encode($note["content"] ?? "", JSON_HEX_APOS | JSON_HEX_QUOT); ?>)' style="background: #0284c7; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px;">Edit</button>
 
                             <form method="POST" action="index.php" onsubmit="return confirm('Delete this note?');" style="margin: 0;">
                                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
