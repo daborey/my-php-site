@@ -492,25 +492,32 @@ try {
 
         /* ===== CodeMirror editor styling ===== */
         .CodeMirror {
-            height: 400px;
-            /* taller editor */
-            font-size: 14px;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            border-radius: 4px;
-            border: 1px solid #334155;
-            background: #282a36;
-            /* dracula bg */
+            height: 70vh !important;
+            font-size: 14px !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            border-radius: 6px !important;
+            border: 1px solid #44475a !important;
+            background: #282a36 !important;
+            line-height: 1.5 !important;
+            overflow: hidden !important;
         }
 
         .CodeMirror-scroll {
-            min-height: 400px;
+            height: 70vh !important;
+            min-height: 70vh !important;
+            max-height: 70vh !important;
+            overflow-y: auto !important;
+            overflow-x: auto !important;
         }
 
         /* Fix modal width for editor */
         #editModal>div {
             width: 90%;
             max-width: 800px;
-            /* wider modal — was 480px */
+            max-height: 90vh;
+            /* ← ADD */
+            overflow-y: auto;
+            /* ← ADD */
         }
     </style>
 </head>
@@ -649,7 +656,7 @@ try {
             mode: 'htmlmixed',
             theme: 'dracula',
             lineNumbers: true,
-            lineWrapping: true,
+            lineWrapping: false,
             indentUnit: 2,
             tabSize: 2
         });
