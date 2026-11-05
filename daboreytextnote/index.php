@@ -634,7 +634,13 @@ try {
                 </div>
 
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                    <button type="button" onclick="formatEditorContent(this)" style="background: #8b5cf6; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">⚡ Format</button>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button type="button" onclick="formatEditorContent(this)" style="background: #8b5cf6; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">⚡ Format</button>
+                        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #cbd5e1; cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="wordWrapToggle" onchange="toggleWordWrap(this)" style="width: 16px; height: 16px; cursor: pointer; accent-color: #8b5cf6;">
+                            Wrap
+                        </label>
+                    </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="button" onclick="closeEditModal()" style="background: #64748b; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Cancel</button>
                         <button type="submit" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">Save Changes</button>
@@ -676,6 +682,18 @@ try {
         function closeEditModal() {
             document.getElementById('editModal').style.display = 'none';
             cmEditor.setValue('');
+            // Reset wrap toggle to OFF
+            var wrapChk = document.getElementById('wordWrapToggle');
+            if (wrapChk) {
+                wrapChk.checked = false;
+                cmEditor.setOption('lineWrapping', false);
+            }
+        }
+
+        // Toggle word wrap on/off instantly
+        function toggleWordWrap(checkbox) {
+            cmEditor.setOption('lineWrapping', checkbox.checked);
+            cmEditor.refresh();
         }
 
         // Format button → beautify the HTML inside the editor
