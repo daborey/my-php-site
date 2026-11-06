@@ -635,7 +635,7 @@ try {
         </div>
     </div>
     <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
-        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; border: 1px solid #334155; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+        <div style="background: #1e293b; padding: 24px; border-radius: 8px; width: 90%; border: 1px solid #334155; height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
             <h3 style="margin-top: 0; color: #38bdf8;">Edit Note</h3>
             <form method="POST" action="index.php" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden;">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token']); ?>">
