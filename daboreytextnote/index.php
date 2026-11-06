@@ -496,8 +496,9 @@ try {
         }
 
         /* ===== CodeMirror editor styling ===== */
+        /* ===== CodeMirror editor styling ===== */
         .CodeMirror {
-            height: 70vh !important;
+            height: 100% !important;
             font-size: 14px !important;
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
             border-radius: 6px !important;
@@ -508,21 +509,32 @@ try {
         }
 
         .CodeMirror-scroll {
-            height: 70vh !important;
-            min-height: 70vh !important;
-            max-height: 70vh !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            max-height: 100% !important;
             overflow-y: auto !important;
             overflow-x: auto !important;
         }
 
         /* Fix modal width for editor */
+        /* Fix modal width for editor */
         #editModal>div {
             width: 90%;
             max-width: 800px;
             max-height: 90vh;
-            /* ← ADD */
-            overflow-y: auto;
-            /* ← ADD */
+            overflow: hidden;
+            /* ← changed: no modal scroll */
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* NEW: make form fill modal, editor scrolls internally */
+        #editModal form {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
         }
     </style>
 </head>
@@ -574,7 +586,7 @@ try {
         <?php if (!empty($notes)) : ?>
             <?php foreach ($notes as $note) : ?>
                 <div class="note-card">
-                <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                    <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
@@ -634,7 +646,7 @@ try {
                     <input type="text" name="title" id="edit_title" placeholder="Title" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;">
                 </div>
 
-                <div style="margin-bottom: 12px;">
+                <div style="margin-bottom: 12px; flex: 1; min-height: 0; overflow: hidden;">
                     <textarea name="content" id="edit_content" rows="5" placeholder="Content" style="width: 100%; padding: 8px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 4px; box-sizing: border-box;"></textarea>
                 </div>
 
