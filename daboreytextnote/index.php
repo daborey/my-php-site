@@ -385,12 +385,8 @@ try {
             padding: 16px;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
             word-wrap: break-word;
             height: 260px;
-            /* fixed height */
-            overflow: hidden;
-            /* prevent card growing */
         }
 
         .note-title {
@@ -406,10 +402,10 @@ try {
             white-space: pre-wrap;
             margin: 0 0 12px 0;
             flex: 1;
-            /* fill remaining space */
+            min-height: 0;
+            /* ← KEY: allows shrinking + scrolling */
             overflow-y: auto;
-            /* scroll inside */
-            max-height: 100%;
+            /* ← the ONLY scroll */
         }
 
         .note-date {
@@ -578,7 +574,7 @@ try {
         <?php if (!empty($notes)) : ?>
             <?php foreach ($notes as $note) : ?>
                 <div class="note-card">
-                    <div style="flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+                <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
                         <div class="note-title"><?php echo htmlspecialchars($note['title'] ?: 'Untitled'); ?></div>
                         <div class="note-content"><?php echo htmlspecialchars($note['content']); ?></div>
                     </div>
@@ -686,17 +682,17 @@ try {
             modal.style.display = 'flex';
 
             // 2. Wait one frame → editor is now visible with correct height
-            requestAnimationFrame(function () {
+            requestAnimationFrame(function() {
                 // 3. Set content AFTER editor has size
                 cmEditor.setValue(content || '');
 
                 // 4. Wait one more frame → content is rendered
-                requestAnimationFrame(function () {
+                requestAnimationFrame(function() {
                     // 5. Refresh → CodeMirror recalculates scroll height
                     cmEditor.refresh();
 
                     // 6. Safety refresh
-                    setTimeout(function () {
+                    setTimeout(function() {
                         cmEditor.refresh();
                     }, 100);
                 });
