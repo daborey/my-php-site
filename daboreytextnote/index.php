@@ -682,9 +682,14 @@ try {
             document.getElementById('edit_title').value = title;
             cmEditor.setValue(content || '');
             document.getElementById('editModal').style.display = 'flex';
+            
+            // Double refresh: one short, one after modal fully renders
             setTimeout(function() {
                 cmEditor.refresh();
             }, 50);
+            setTimeout(function() {
+                cmEditor.refresh();
+            }, 200);
         }
 
         // Close modal → clear editor so next open is fresh
