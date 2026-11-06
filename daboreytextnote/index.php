@@ -680,16 +680,27 @@ try {
         function openEditModal(id, title, content) {
             document.getElementById('edit_note_id').value = id;
             document.getElementById('edit_title').value = title;
-            cmEditor.setValue(content || '');
-            document.getElementById('editModal').style.display = 'flex';
-            
-            // Double refresh: one short, one after modal fully renders
-            setTimeout(function() {
-                cmEditor.refresh();
-            }, 50);
-            setTimeout(function() {
-                cmEditor.refresh();
-            }, 200);
+
+            // 1. SHOW MODAL FIRST — editor gets its real size
+            var modal = document.getElementById('editModal');
+            modal.style.display = 'flex';
+
+            // 2. Wait one frame → editor is now visible with correct height
+            requestAnimationFrame(function () {
+                // 3. Set content AFTER editor has size
+                cmEditor.setValue(content || '');
+
+                // 4. Wait one more frame → content is rendered
+                requestAnimationFrame(function () {
+                    // 5. Refresh → CodeMirror recalculates scroll height
+                    cmEditor.refresh();
+
+                    // 6. Safety refresh
+                    setTimeout(function () {
+                        cmEditor.refresh();
+                    }, 100);
+                });
+            });
         }
 
         // Close modal → clear editor so next open is fresh
