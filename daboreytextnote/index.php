@@ -512,8 +512,15 @@ try {
             height: 100% !important;
             min-height: 0 !important;
             max-height: 100% !important;
-            overflow-y: auto !important;
-            overflow-x: auto !important;
+            overflow-y: scroll !important;
+            /* ← always show vertical scrollbar */
+            overflow-x: scroll !important;
+            /* ← always show horizontal scrollbar */
+        }
+
+        /* Hide horizontal scrollbar when wrap is ON */
+        .CodeMirror-wrap .CodeMirror-scroll {
+            overflow-x: hidden !important;
         }
 
         /* Fix modal width for editor */
@@ -689,24 +696,26 @@ try {
             document.getElementById('edit_note_id').value = id;
             document.getElementById('edit_title').value = title;
 
-            // 1. SHOW MODAL FIRST — editor gets its real size
             var modal = document.getElementById('editModal');
             modal.style.display = 'flex';
 
-            // 2. Wait one frame → editor is now visible with correct height
             requestAnimationFrame(function() {
-                // 3. Set content AFTER editor has size
                 cmEditor.setValue(content || '');
 
-                // 4. Wait one more frame → content is rendered
                 requestAnimationFrame(function() {
-                    // 5. Refresh → CodeMirror recalculates scroll height
                     cmEditor.refresh();
+                    // Reset scroll position to prevent flicker
+                    cmEditor.getScrollerElement().scrollTop = 0;
+                    cmEditor.getScrollerElement().scrollLeft = 0;
 
-                    // 6. Safety refresh
                     setTimeout(function() {
                         cmEditor.refresh();
                     }, 100);
+
+                    // Extra safety — third refresh after animations settle
+                    setTimeout(function() {
+                        cmEditor.refresh();
+                    }, 300);
                 });
             });
         }
@@ -726,7 +735,9 @@ try {
         // Toggle word wrap on/off instantly
         function toggleWordWrap(checkbox) {
             cmEditor.setOption('lineWrapping', checkbox.checked);
-            cmEditor.refresh();
+            setTimeout(function() {
+                cmEditor.refresh();
+            }, 30);
         }
 
         // Format button → beautify the HTML inside the editor
