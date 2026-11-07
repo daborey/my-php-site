@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../geo-lock.php';
+require_once __DIR__ . '/geo-lock.php';
 // Optional PHP logic can go here
 ?>
 <!DOCTYPE html>
