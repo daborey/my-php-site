@@ -2,7 +2,7 @@
 // ============================================
 // FILE: daboreystep2/login.php
 // ============================================
-
+require_once __DIR__ . '/../geo-lock.php';
 require_once __DIR__ . '/config.php';
 
 $error_msg = "";

@@ -1,5 +1,4 @@
 <?php
-require_once __DIR__ . '/../geo-lock.php';
 $requestUri = $_SERVER['REQUEST_URI'];
 $parsedUrl  = parse_url($requestUri);
 $path       = $parsedUrl['path'] ?? '';
