@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../geo-lock.php';
+require_once __DIR__ . '/geo-lock.php';
 // 1. Production security settings
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
