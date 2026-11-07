@@ -51,8 +51,8 @@ if ($visitor_country !== '' && $visitor_country !== 'KH') {
     </head>
     <body>
         <div class="container">
-            <h1>403 Forbidden</h1>
-            <p>This service is restricted to users within Cambodia.</p>
+            <h1></h1>
+            <p>This service is unavailable now.</p>
         </div>
     </body>
     </html>';
