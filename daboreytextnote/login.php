@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../geo-lock.php';
 // 1. Session Setup
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
